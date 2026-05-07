@@ -1,0 +1,41 @@
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Git / IDE
+**/.git/
+**/.vscode/
+**/.idea/
+
+# Virtual envs
+**/.venv/
+**/venv/
+**/env/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docs / binaries not needed
+*.pdf
+*.docx
+*.pptx
+
+# liboqs artifacts generated locally (Windows build)
+liboqs/build/
+liboqs/install/
+
+# Optional heavy folders that are not needed for your API build
+liboqs/docs/
+liboqs/tests/
+liboqs/scripts/
+liboqs/zephyr/
+liboqs/cpp/
+liboqs/.github/
+
+# Python build artifacts
+dist/
+build/
+*.egg-info

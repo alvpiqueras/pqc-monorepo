@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+.vscode/
+.env
+.venv/
+env/
+*.log
+
+liboqs/build/
+liboqs/install/
+liboqs/docs/
+liboqs/tests/
+liboqs/.github/

@@ -1,0 +1,14 @@
+services:
+  api-pqc:
+    build:
+      context: .
+      dockerfile: api-pqc/Dockerfile
+    ports:
+      - "8001:8000"
+
+  api-merkle:
+    build:
+      context: .
+      dockerfile: api-merkle/Dockerfile
+    ports:
+      - "8002:8000"

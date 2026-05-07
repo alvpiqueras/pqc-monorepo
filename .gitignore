@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+build/
+
+# Docker / logs
+*.log
+.docker/
+docker-data/
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Archivos pesados/documentación local
+*.pdf
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Liboqs build outputs
+liboqs/build/
+liboqs/.build/
