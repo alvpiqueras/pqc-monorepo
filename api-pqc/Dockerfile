@@ -1,30 +1,13 @@
-FROM python:3.11-slim
+FROM qcs-liboqs-base
 
 WORKDIR /workspace
 
-RUN apt-get update && apt-get install -y \
-    cmake \
-    build-essential \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY . .
-
-RUN cmake -S /workspace/liboqs -B /tmp/liboqs-build \
-    -DBUILD_SHARED_LIBS=ON \
-    -DOQS_BUILD_ONLY_LIB=ON \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/opt/liboqs \
-    && cmake --build /tmp/liboqs-build --parallel 1 \
-    && cmake --install /tmp/liboqs-build
-
-ENV OQS_INSTALL_PATH=/opt/liboqs
-ENV LD_LIBRARY_PATH=/opt/liboqs/lib
-ENV PATH="/opt/liboqs/bin:${PATH}"
+COPY api-pqc/API /workspace/API
 
 WORKDIR /workspace/API
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
 
