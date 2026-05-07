@@ -1,0 +1,41 @@
+name: Build liboqs base image
+
+on:
+  push:
+    branches:
+      - main
+      - refactor-liboqs-comun
+    paths:
+      - "liboqs/**"
+      - "docker/liboqs-base.Dockerfile"
+      - ".github/workflows/build-liboqs-base.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-liboqs-base:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push liboqs base image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/liboqs-base.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/qcs-liboqs-base:latest
+            ghcr.io/${{ github.repository_owner }}/qcs-liboqs-base:${{ github.sha }}

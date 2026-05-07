@@ -1,4 +1,4 @@
-FROM qcs-liboqs-base
+FROM ghcr.io/alvpiqueras/qcs-liboqs-base:latest
 
 ENV PYTHONPATH=/workspace
 
