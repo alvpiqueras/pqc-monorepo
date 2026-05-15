@@ -12,3 +12,10 @@ services:
       dockerfile: api-merkle/Dockerfile
     ports:
       - "8002:8000"
+
+  api-intranet:
+    build:
+      context: .
+      dockerfile: api-intranet/Dockerfile
+    ports:
+      - "8003:8000"    
