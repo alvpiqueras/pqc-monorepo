@@ -1,6 +1,21 @@
 from fastapi import APIRouter
-
+from datetime import datetime, timezone
 from core.config import settings
+
+from models.session_models import (
+    EncapsulateRequest,
+    EncapsulateResponse,
+    DecapsulateRequest,
+    DecapsulateResponse,
+    KemKeypairResponse,
+)
+
+from services.pqc_service import (
+    get_enabled_algorithms,
+    generate_kem_keypair,
+    encapsulate_secret,
+    decapsulate_secret,
+)
 
 
 router = APIRouter(
@@ -65,4 +80,68 @@ def get_intranet_scenario():
             "Full internal PKI hierarchy",
             "mTLS between services",
         ],
+    }
+
+
+@router.get("/algorithms")
+def list_enabled_algorithms():
+    """
+    List the enabled KEM and signature algorithms in the current liboqs build.
+    """
+
+    return get_enabled_algorithms()
+
+
+@router.post("/session/keypair", response_model=KemKeypairResponse)
+def create_kem_keypair():
+    """
+    Generate an ML-KEM keypair for simulating an internal HTTPS session.
+    """
+
+    result = generate_kem_keypair()
+
+    return {
+        "kem_algorithm": result["kem_algorithm"],
+        "public_key_b64": result["public_key_b64"],
+        "private_key_b64": result["private_key_b64"],
+        "public_key_size_bytes": result["public_key_size_bytes"],
+        "private_key_size_bytes": result["private_key_size_bytes"],
+        "generated_at": datetime.now(timezone.utc),
+    }
+
+
+@router.post("/session/encapsulate", response_model=EncapsulateResponse)
+def create_session_secret(request: EncapsulateRequest):
+    """
+    Encapsulate a shared secret using the intranet service public key.
+    """
+
+    result = encapsulate_secret(request.public_key_b64)
+
+    return {
+        "kem_algorithm": result["kem_algorithm"],
+        "ciphertext_b64": result["ciphertext_b64"],
+        "shared_secret_b64": result["shared_secret_b64"],
+        "ciphertext_size_bytes": result["ciphertext_size_bytes"],
+        "shared_secret_size_bytes": result["shared_secret_size_bytes"],
+        "encapsulated_at": datetime.now(timezone.utc),
+    }
+
+
+@router.post("/session/decapsulate", response_model=DecapsulateResponse)
+def recover_session_secret(request: DecapsulateRequest):
+    """
+    Decapsulate a shared secret using the intranet service private key.
+    """
+
+    result = decapsulate_secret(
+        private_key_b64=request.private_key_b64,
+        ciphertext_b64=request.ciphertext_b64,
+    )
+
+    return {
+        "kem_algorithm": result["kem_algorithm"],
+        "shared_secret_b64": result["shared_secret_b64"],
+        "shared_secret_size_bytes": result["shared_secret_size_bytes"],
+        "decapsulated_at": datetime.now(timezone.utc),
     }
