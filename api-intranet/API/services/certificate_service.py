@@ -153,7 +153,7 @@ def issue_internal_certificate(
         public_key_b64=request.public_key_b64,
         issuer_signature_algorithm=settings.SIGNATURE_ALGORITHM,
         issuer_public_key_b64=_INTERNAL_CA_KEYPAIR["public_key_b64"],
-        usage=request.usage,
+        usage=_normalize_usage(request.usage),
         valid_from=valid_from,
         valid_to=valid_to,
         signature_b64="",
@@ -275,3 +275,18 @@ def verify_internal_certificate(
         "checked_at": checked_at,
         "verification_time_ms": _measure_ms(start),
     }
+
+def _normalize_usage(usage: list[str]) -> list[str]:
+    """
+    Normalize usage strings to the canonical internal certificate format.
+
+    This prevents small input differences such as server_auth vs server-auth
+    from breaking the expected usage checks.
+    """
+
+    mapping = {
+        "server_auth": "server-auth",
+        "internal_https": "internal-https",
+    }
+
+    return [mapping.get(item, item) for item in usage]
