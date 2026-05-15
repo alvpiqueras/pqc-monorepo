@@ -1,20 +1,36 @@
-from fastapi import APIRouter
 from datetime import datetime, timezone
-from core.config import settings
 
+from fastapi import APIRouter
+
+from core.config import settings
+from models.certificate_models import (
+    CertificateIssueRequest,
+    CertificateIssueResponse,
+    CertificateVerifyRequest,
+    CertificateVerifyResponse,
+    IntranetMetricsResponse,
+    ServiceIdentityRequest,
+    ServiceIdentityResponse,
+)
 from models.session_models import (
-    EncapsulateRequest,
-    EncapsulateResponse,
     DecapsulateRequest,
     DecapsulateResponse,
+    EncapsulateRequest,
+    EncapsulateResponse,
     KemKeypairResponse,
 )
-
+from services.certificate_service import (
+    generate_service_identity,
+    get_internal_ca_info,
+    issue_internal_certificate,
+    verify_internal_certificate,
+)
+from services.metrics_service import get_intranet_metrics
 from services.pqc_service import (
-    get_enabled_algorithms,
-    generate_kem_keypair,
-    encapsulate_secret,
     decapsulate_secret,
+    encapsulate_secret,
+    generate_kem_keypair,
+    get_enabled_algorithms,
 )
 
 
@@ -22,6 +38,14 @@ router = APIRouter(
     prefix="/intranet",
     tags=["Intranet HTTPS"],
 )
+
+
+def _now_utc() -> datetime:
+    """
+    Return the current UTC time using a timezone-aware datetime object.
+    """
+
+    return datetime.now(timezone.utc)
 
 
 @router.get("/info")
@@ -73,13 +97,22 @@ def get_intranet_scenario():
             "session_secret": "Simulated key establishment using ML-KEM",
             "deployment_model": "Controlled internal rollout",
         },
-        "not_implemented_in_this_first_version": [
-            "Real PQC-TLS socket integration",
-            "Browser-level certificate validation",
-            "OCSP/CRL revocation",
-            "Full internal PKI hierarchy",
-            "mTLS between services",
-        ],
+        "academic_scope": {
+            "implemented": [
+                "ML-DSA service identity generation",
+                "Simplified internal certificate issuance",
+                "Simplified internal certificate verification",
+                "ML-KEM session secret encapsulation",
+                "Basic size and timing metrics",
+            ],
+            "not_implemented": [
+                "Real PQC-TLS socket integration",
+                "Browser-level certificate validation",
+                "OCSP/CRL revocation",
+                "Full internal PKI hierarchy",
+                "mTLS between services",
+            ],
+        },
     }
 
 
@@ -90,6 +123,47 @@ def list_enabled_algorithms():
     """
 
     return get_enabled_algorithms()
+
+
+@router.get("/ca")
+def get_internal_ca():
+    """
+    Return public metadata of the simulated internal CA.
+
+    The private key is never exposed.
+    """
+
+    return get_internal_ca_info()
+
+
+@router.post("/identity/generate", response_model=ServiceIdentityResponse)
+def create_service_identity(request: ServiceIdentityRequest):
+    """
+    Generate an ML-DSA identity for the internal intranet service.
+    """
+
+    return generate_service_identity(
+        service_id=request.service_id,
+        internal_dns=request.internal_dns,
+    )
+
+
+@router.post("/certificate/issue", response_model=CertificateIssueResponse)
+def issue_certificate(request: CertificateIssueRequest):
+    """
+    Issue a simplified ML-DSA-signed internal certificate-like object.
+    """
+
+    return issue_internal_certificate(request)
+
+
+@router.post("/certificate/verify", response_model=CertificateVerifyResponse)
+def verify_certificate(request: CertificateVerifyRequest):
+    """
+    Verify a simplified internal certificate-like object.
+    """
+
+    return verify_internal_certificate(request.certificate)
 
 
 @router.post("/session/keypair", response_model=KemKeypairResponse)
@@ -106,7 +180,7 @@ def create_kem_keypair():
         "private_key_b64": result["private_key_b64"],
         "public_key_size_bytes": result["public_key_size_bytes"],
         "private_key_size_bytes": result["private_key_size_bytes"],
-        "generated_at": datetime.now(timezone.utc),
+        "generated_at": _now_utc(),
     }
 
 
@@ -124,7 +198,7 @@ def create_session_secret(request: EncapsulateRequest):
         "shared_secret_b64": result["shared_secret_b64"],
         "ciphertext_size_bytes": result["ciphertext_size_bytes"],
         "shared_secret_size_bytes": result["shared_secret_size_bytes"],
-        "encapsulated_at": datetime.now(timezone.utc),
+        "encapsulated_at": _now_utc(),
     }
 
 
@@ -143,5 +217,14 @@ def recover_session_secret(request: DecapsulateRequest):
         "kem_algorithm": result["kem_algorithm"],
         "shared_secret_b64": result["shared_secret_b64"],
         "shared_secret_size_bytes": result["shared_secret_size_bytes"],
-        "decapsulated_at": datetime.now(timezone.utc),
+        "decapsulated_at": _now_utc(),
     }
+
+
+@router.get("/metrics", response_model=IntranetMetricsResponse)
+def get_metrics():
+    """
+    Return basic cryptographic metrics for the intranet HTTPS use case.
+    """
+
+    return get_intranet_metrics()
