@@ -19,3 +19,10 @@ services:
       dockerfile: api-intranet/Dockerfile
     ports:
       - "8003:8000"    
+
+  api-interna:
+    build:
+      context: .
+      dockerfile: api-interna/Dockerfile
+    ports:
+      - "8004:8000"    
