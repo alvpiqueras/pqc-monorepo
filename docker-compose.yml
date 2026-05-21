@@ -1,8 +1,8 @@
 services:
-  api-pqc:
+  pqc-base:
     build:
       context: .
-      dockerfile: api-pqc/Dockerfile
+      dockerfile: pqc-base/Dockerfile
     ports:
       - "8001:8000"
 
