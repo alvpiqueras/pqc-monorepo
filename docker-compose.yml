@@ -26,3 +26,10 @@ services:
       dockerfile: api-interna/Dockerfile
     ports:
       - "8004:8000"    
+
+  internal-ca:
+    build:
+      context: .
+      dockerfile: internal-ca/Dockerfile
+    ports:
+      - "8005:8000"
