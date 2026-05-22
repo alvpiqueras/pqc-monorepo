@@ -1,4 +1,5 @@
 import subprocess
+import time
 from pathlib import Path
 from typing import List
 
@@ -390,4 +391,115 @@ def issue_certificate_from_uploaded_csr_file(
         "certificate_path": str(certificate_path),
         "certificate_pem": read_text_file(certificate_path),
         "message": "X.509 PQC certificate issued successfully from uploaded CSR file.",
+    }
+
+def _measure_ms(start_time: float) -> float:
+    """
+    Return elapsed time in milliseconds.
+    """
+
+    return round((time.perf_counter() - start_time) * 1000, 4)
+
+
+def get_file_size_bytes(path: Path) -> int:
+    """
+    Return file size in bytes.
+    """
+
+    assert_file_exists(path, "File")
+    return path.stat().st_size
+
+
+def run_ca_metrics_demo(
+    signature_algorithm: str = "ML-DSA-65",
+    validity_days: int = 365,
+) -> dict:
+    """
+    Run a full temporary CA flow and collect timing and size metrics.
+
+    Flow:
+    - generate internal CA;
+    - generate service CSR;
+    - issue X.509 certificate;
+    - verify issued certificate;
+    - collect PEM file sizes.
+
+    This endpoint is intended for academic benchmarking, not production
+    performance measurement.
+    """
+
+    total_start = time.perf_counter()
+
+    ca_start = time.perf_counter()
+    ca_result = generate_internal_ca(
+        GenerateCaRequest(
+            common_name="Metrics Demo Internal PQC CA",
+            organization="TFM PQC Lab",
+            country="ES",
+            signature_algorithm=signature_algorithm,
+            validity_days=validity_days,
+        )
+    )
+    ca_generation_ms = _measure_ms(ca_start)
+
+    csr_start = time.perf_counter()
+    csr_result = generate_service_csr(
+        GenerateCsrRequest(
+            common_name="metrics-demo-service.local",
+            organization="TFM PQC Lab",
+            country="ES",
+            signature_algorithm=signature_algorithm,
+        )
+    )
+    csr_generation_ms = _measure_ms(csr_start)
+
+    issue_start = time.perf_counter()
+    cert_result = issue_certificate_from_csr(
+        IssueCertificateRequest(
+            ca_id=ca_result["ca_id"],
+            csr_id=csr_result["csr_id"],
+            validity_days=validity_days,
+        )
+    )
+    certificate_issuance_ms = _measure_ms(issue_start)
+
+    verify_start = time.perf_counter()
+    verify_result = verify_certificate(
+        VerifyCertificateRequest(
+            ca_id=ca_result["ca_id"],
+            certificate_id=cert_result["certificate_id"],
+        )
+    )
+    certificate_verification_ms = _measure_ms(verify_start)
+
+    ca_certificate_path = ca_cert_path(ca_result["ca_id"])
+    csr_file_path = csr_path(csr_result["csr_id"])
+    issued_certificate_path = issued_cert_path(cert_result["certificate_id"])
+
+    return {
+        "signature_algorithm": signature_algorithm,
+        "validity_days": validity_days,
+        "timings_ms": {
+            "ca_generation": ca_generation_ms,
+            "csr_generation": csr_generation_ms,
+            "certificate_issuance": certificate_issuance_ms,
+            "certificate_verification": certificate_verification_ms,
+            "total_flow": _measure_ms(total_start),
+        },
+        "sizes_bytes": {
+            "ca_certificate_pem": get_file_size_bytes(ca_certificate_path),
+            "service_csr_pem": get_file_size_bytes(csr_file_path),
+            "issued_certificate_pem": get_file_size_bytes(issued_certificate_path),
+        },
+        "identifiers": {
+            "ca_id": ca_result["ca_id"],
+            "csr_id": csr_result["csr_id"],
+            "certificate_id": cert_result["certificate_id"],
+        },
+        "verification_valid": bool(verify_result["valid"]),
+        "notes": [
+            "Metrics are generated dynamically for a complete temporary CA flow.",
+            "Values may vary depending on CPU load, Docker runtime and hosting environment.",
+            "PEM sizes reflect the encoded X.509/CSR artifacts, not only raw key or signature sizes.",
+        ],
     }

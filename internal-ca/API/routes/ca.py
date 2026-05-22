@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, File, Form, UploadFile
+from fastapi import APIRouter, HTTPException, File, Form, UploadFile, Query
 from fastapi.responses import FileResponse
 
 from core.config import settings
@@ -13,6 +13,7 @@ from models.certificate_models import (
     VerifyCertificateRequest,
     VerifyCertificateResponse,
     CertificateInfoResponse,
+    CaMetricsDemoResponse,
 )
 
 from services.openssl_service import (
@@ -25,6 +26,7 @@ from services.openssl_service import (
     get_certificate_file_path,
     get_ca_certificate_file_path,
     get_csr_file_path,
+    run_ca_metrics_demo,
 )
 
 
@@ -274,3 +276,39 @@ def download_csr(csr_id: str):
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    
+@router.get(
+    "/metrics/demo",
+    response_model=CaMetricsDemoResponse,
+)
+def get_ca_metrics_demo(
+    signature_algorithm: str = Query(
+        default="ML-DSA-65",
+        description="PQC signature algorithm used for the demo flow.",
+        examples=["ML-DSA-65"],
+    ),
+    validity_days: int = Query(
+        default=365,
+        ge=1,
+        le=3650,
+        description="Validity period for the generated CA and issued certificate.",
+    ),
+):
+    """
+    Run a complete CA demo flow and return timing and size metrics.
+
+    This measures the practical impact of X.509 PQC certificates:
+    - CA generation time;
+    - CSR generation time;
+    - certificate issuance time;
+    - certificate verification time;
+    - PEM artifact sizes.
+    """
+
+    try:
+        return run_ca_metrics_demo(
+            signature_algorithm=signature_algorithm,
+            validity_days=validity_days,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
