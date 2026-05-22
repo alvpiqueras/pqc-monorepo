@@ -124,6 +124,41 @@ class IssueCertificateResponse(BaseModel):
     certificate_pem: str
     message: str
 
+class IssueCertificateFromPemRequest(BaseModel):
+    """
+    Request model for issuing a certificate from an externally generated CSR PEM.
+
+    This is closer to a real PKI workflow: the service generates its own
+    private key and CSR, and the CA only receives the CSR.
+    """
+
+    ca_id: str = Field(
+        description="Identifier of the CA that will sign the certificate.",
+        examples=["ca-abc123def456"],
+    )
+    csr_pem: str = Field(
+        description="PEM-encoded Certificate Signing Request.",
+        examples=[
+            "-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n"
+        ],
+    )
+    validity_days: int = Field(
+        default=365,
+        ge=1,
+        le=3650,
+        description="Validity period of the issued certificate in days.",
+        examples=[365],
+    )
+
+
+class IssueCertificateFromFileResponse(BaseModel):
+    certificate_id: str
+    ca_id: str
+    uploaded_csr_id: str
+    certificate_path: str
+    certificate_pem: str
+    message: str
+
 
 class VerifyCertificateRequest(BaseModel):
     """

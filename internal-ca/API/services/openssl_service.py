@@ -14,6 +14,7 @@ from services.storage_service import (
     ca_cert_path,
     ca_key_path,
     csr_path,
+    external_csr_path,
     ensure_storage_dirs,
     issued_cert_path,
     new_ca_id,
@@ -320,3 +321,73 @@ def get_csr_file_path(csr_id: str) -> Path:
     request_path = csr_path(csr_id)
     assert_file_exists(request_path, "CSR")
     return request_path
+
+def issue_certificate_from_uploaded_csr_file(
+    ca_id: str,
+    csr_pem_bytes: bytes,
+    validity_days: int,
+) -> dict:
+    """
+    Issue an X.509 certificate from an uploaded CSR PEM file.
+
+    This models the realistic PKI flow where an external service keeps its
+    private key locally and sends only the CSR file to the internal CA.
+    """
+
+    ensure_storage_dirs()
+
+    ca_certificate_path = ca_cert_path(ca_id)
+    ca_private_key_path = ca_key_path(ca_id)
+
+    assert_file_exists(ca_certificate_path, "CA certificate")
+    assert_file_exists(ca_private_key_path, "CA private key")
+
+    uploaded_csr_id = new_csr_id()
+    request_path = external_csr_path(uploaded_csr_id)
+
+    request_path.write_bytes(csr_pem_bytes)
+
+    # Validate CSR before issuing a certificate.
+    _run_openssl_command(
+        [
+            "openssl",
+            "req",
+            "-in",
+            str(request_path),
+            "-noout",
+            "-verify",
+        ]
+    )
+
+    certificate_id = new_certificate_id()
+    certificate_path = issued_cert_path(certificate_id)
+
+    _run_openssl_command(
+        [
+            "openssl",
+            "x509",
+            "-req",
+            "-in",
+            str(request_path),
+            "-CA",
+            str(ca_certificate_path),
+            "-CAkey",
+            str(ca_private_key_path),
+            "-CAserial",
+            str(serial_path(ca_id)),
+            "-CAcreateserial",
+            "-out",
+            str(certificate_path),
+            "-days",
+            str(validity_days),
+        ]
+    )
+
+    return {
+        "certificate_id": certificate_id,
+        "ca_id": ca_id,
+        "uploaded_csr_id": uploaded_csr_id,
+        "certificate_path": str(certificate_path),
+        "certificate_pem": read_text_file(certificate_path),
+        "message": "X.509 PQC certificate issued successfully from uploaded CSR file.",
+    }

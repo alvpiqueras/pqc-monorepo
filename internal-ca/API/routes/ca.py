@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, File, Form, UploadFile
 from fastapi.responses import FileResponse
 
 from core.config import settings
@@ -9,14 +9,17 @@ from models.certificate_models import (
     GenerateCsrResponse,
     IssueCertificateRequest,
     IssueCertificateResponse,
+    IssueCertificateFromFileResponse,
     VerifyCertificateRequest,
     VerifyCertificateResponse,
     CertificateInfoResponse,
 )
+
 from services.openssl_service import (
     generate_internal_ca,
     generate_service_csr,
     issue_certificate_from_csr,
+    issue_certificate_from_uploaded_csr_file,
     verify_certificate,
     inspect_certificate,
     get_certificate_file_path,
@@ -149,6 +152,7 @@ def generate_csr(request: GenerateCsrRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+
 @router.post("/certificate/issue", response_model=IssueCertificateResponse)
 def issue_certificate(request: IssueCertificateRequest):
     """
@@ -162,6 +166,33 @@ def issue_certificate(request: IssueCertificateRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+@router.post(
+    "/certificate/issue-from-csr-file",
+    response_model=IssueCertificateFromFileResponse,
+)
+async def issue_certificate_from_csr_file(
+    ca_id: str = Form(...),
+    validity_days: int = Form(365),
+    csr_file: UploadFile = File(...),
+):
+    """
+    Issue an X.509 certificate from an uploaded CSR PEM file.
+    """
+
+    try:
+        csr_pem_bytes = await csr_file.read()
+
+        return issue_certificate_from_uploaded_csr_file(
+            ca_id=ca_id,
+            csr_pem_bytes=csr_pem_bytes,
+            validity_days=validity_days,
+        )
+
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
 
 @router.post("/certificate/verify", response_model=VerifyCertificateResponse)
 def verify_issued_certificate(request: VerifyCertificateRequest):

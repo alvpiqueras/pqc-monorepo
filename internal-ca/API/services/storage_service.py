@@ -46,10 +46,11 @@ def service_key_path(csr_id: str) -> Path:
 def csr_path(csr_id: str) -> Path:
     return settings.CSRS_DIR / f"{csr_id}.csr.pem"
 
-
 def issued_cert_path(certificate_id: str) -> Path:
     return settings.CERTIFICATES_DIR / f"{certificate_id}.cert.pem"
 
+def external_csr_path(csr_id: str) -> Path:
+    return settings.CSRS_DIR / f"{csr_id}.external.csr.pem"
 
 def serial_path(ca_id: str) -> Path:
     return settings.CERTIFICATES_DIR / f"{ca_id}.srl"
