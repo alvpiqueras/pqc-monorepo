@@ -5,48 +5,50 @@ from core.config import settings
 from routes.intranet import router as intranet_router
 
 
+allowed_origins = (
+    ["*"]
+    if settings.ALLOWED_ORIGINS == "*"
+    else settings.ALLOWED_ORIGINS.split(",")
+)
+
+
 app = FastAPI(
-    title="QCS API Intranet",
-    description=settings.SERVICE_DESCRIPTION,
+    title="Private Intranet HTTPS",
     version=settings.SERVICE_VERSION,
+    description=(
+        "Academic simulation of an internal HTTPS intranet service consuming "
+        "PQC X.509 certificates issued by an internal CA."
+    ),
 )
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/")
+@app.get("/", tags=["General"])
 def root():
-    """
-    Root endpoint.
-
-    Provides a minimal entry point for checking that the service is alive.
-    """
-
     return {
-        "message": "QCS api-intranet is running",
+        "status": "running",
         "service": settings.SERVICE_NAME,
         "version": settings.SERVICE_VERSION,
         "docs": "/docs",
+        "health": "/health",
+        "purpose": "Simulate certificate validation for a private intranet HTTPS service.",
     }
 
 
-@app.get("/health")
+@app.get("/health", tags=["General"])
 def health_check():
-    """
-    Health check endpoint for local testing, Docker Compose and Render.
-    """
-
     return {
         "status": "ok",
         "service": settings.SERVICE_NAME,
-        "use_case": settings.USE_CASE,
+        "version": settings.SERVICE_VERSION,
     }
 
 
