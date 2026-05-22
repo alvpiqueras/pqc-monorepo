@@ -2,7 +2,7 @@ FROM ghcr.io/alvpiqueras/qcs-liboqs-base:latest
 
 WORKDIR /workspace
 
-COPY api-pqc/API /workspace/API
+COPY pqc-base/API /workspace/API
 
 WORKDIR /workspace/API
 
