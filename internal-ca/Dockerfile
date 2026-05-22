@@ -1,11 +1,11 @@
 FROM ghcr.io/alvpiqueras/qcs-liboqs-base:latest
 
-ENV PYTHONPATH=/workspace
+ENV PYTHONPATH=/workspace/API
 
 WORKDIR /workspace
 
-COPY api-intranet/API /workspace/API
-COPY api-intranet/requirements.txt /workspace/API/requirements.txt
+COPY internal-ca/API /workspace/API
+COPY internal-ca/requirements.txt /workspace/API/requirements.txt
 
 WORKDIR /workspace/API
 
