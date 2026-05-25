@@ -163,6 +163,8 @@ def issue_certificate(request: IssueCertificateRequest):
 
     try:
         return issue_certificate_from_csr(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -192,6 +194,8 @@ async def issue_certificate_from_csr_file(
 
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     
@@ -204,6 +208,8 @@ def verify_issued_certificate(request: VerifyCertificateRequest):
 
     try:
         return verify_certificate(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -221,6 +227,8 @@ def inspect_issued_certificate(certificate_id: str):
 
     try:
         return inspect_certificate(certificate_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -240,8 +248,12 @@ def download_issued_certificate(certificate_id: str):
             media_type="application/x-pem-file",
             filename=f"{certificate_id}.cert.pem",
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/{ca_id}/download")
@@ -257,8 +269,12 @@ def download_ca_certificate(ca_id: str):
             media_type="application/x-pem-file",
             filename=f"{ca_id}.cert.pem",
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/csr/{csr_id}/download")
@@ -274,8 +290,12 @@ def download_csr(csr_id: str):
             media_type="application/x-pem-file",
             filename=f"{csr_id}.csr.pem",
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
     
 @router.get(
     "/metrics/demo",
