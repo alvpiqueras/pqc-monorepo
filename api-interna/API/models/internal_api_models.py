@@ -80,3 +80,19 @@ class ServiceCallResponse(BaseModel):
     authorization_result: Dict[str, Any]
     steps: List[str]
     api_response: Optional[Dict[str, Any]] = None
+    
+
+class ServiceCallWithPolicyResponse(BaseModel):
+    call_allowed: bool
+    identity_valid: bool
+    authorization_valid: bool
+    calling_service: str
+    target_api: str
+    action: str
+    resource: str
+    reason: str
+    certificate_verification: VerifyServiceCertificateResponse
+    authorization_result: Dict[str, Any]
+    executed_action: Optional[str] = None
+    api_response: Optional[Dict[str, Any]] = None
+    steps: List[str]

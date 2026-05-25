@@ -6,12 +6,14 @@ from models.internal_api_models import (
     ServiceCallResponse,
     VerifyServiceCertificateRequest,
     VerifyServiceCertificateResponse,
+    ServiceCallWithPolicyResponse,
 )
 from services.certificate_verification_service import (
     simulate_internal_service_call,
     simulate_internal_service_call_from_files,
     verify_service_certificate,
     verify_service_certificate_from_files,
+    simulate_internal_service_call_with_policy_from_files,
 )
 
 
@@ -160,5 +162,57 @@ async def demo_service_call_file(
             expected_service_subject=expected_service_subject,
         )
 
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
+
+@router.post(
+    "/demo/service-call-with-policy-file",
+    response_model=ServiceCallWithPolicyResponse,
+)
+async def demo_service_call_with_policy_file(
+    calling_service: str = Form("billing-service"),
+    target_api: str = Form("customer-api"),
+    action: str = Form("read_customer_profile"),
+    resource: str = Form("/customers/123"),
+    expected_service_subject: str = Form("billing-service.local"),
+    ca_certificate_file: UploadFile = File(...),
+    service_certificate_file: UploadFile = File(...),
+    authorization_policy_file: UploadFile = File(...),
+):
+    """
+    Simulate an internal API-to-API call using:
+    - uploaded internal CA certificate;
+    - uploaded calling service certificate;
+    - uploaded authorization policy JSON.
+
+    This endpoint demonstrates the separation between:
+    - identity, validated with a PQC X.509 certificate;
+    - authorization, validated with an external policy file;
+    - action execution, allowed only if both checks succeed.
+    """
+
+    try:
+        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
+        service_certificate_pem = (
+            await service_certificate_file.read()
+        ).decode("utf-8")
+        authorization_policy_json = (
+            await authorization_policy_file.read()
+        ).decode("utf-8")
+
+        return simulate_internal_service_call_with_policy_from_files(
+            calling_service=calling_service,
+            target_api=target_api,
+            action=action,
+            resource=resource,
+            ca_certificate_pem=ca_certificate_pem,
+            service_certificate_pem=service_certificate_pem,
+            expected_service_subject=expected_service_subject,
+            authorization_policy_json=authorization_policy_json,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
