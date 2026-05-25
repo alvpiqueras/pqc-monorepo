@@ -3,4 +3,5 @@ uvicorn[standard]
 pydantic
 pydantic_settings
 python-dotenv
+python-multipart
 liboqs-python

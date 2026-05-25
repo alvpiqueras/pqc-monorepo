@@ -1,36 +1,17 @@
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from core.config import settings
-from models.request_models import (
-    SignInternalRequestInput,
-    SignedInternalApiRequest,
-    VerifyInternalRequestInput,
-    VerifyInternalRequestResponse,
+from models.internal_api_models import (
+    ServiceCallRequest,
+    ServiceCallResponse,
+    VerifyServiceCertificateRequest,
+    VerifyServiceCertificateResponse,
 )
-from models.service_models import (
-    ServiceIdentityRequest,
-    ServiceIdentityResponse,
-)
-from models.session_models import (
-    DecapsulateRequest,
-    DecapsulateResponse,
-    EncapsulateRequest,
-    EncapsulateResponse,
-    KemKeypairResponse,
-)
-from services.internal_request_service import (
-    generate_service_identity,
-    sign_internal_request,
-    verify_internal_request,
-)
-from services.metrics_service import get_internal_api_metrics
-from services.pqc_service import (
-    decapsulate_secret,
-    encapsulate_secret,
-    generate_kem_keypair,
-    get_enabled_algorithms,
+from services.certificate_verification_service import (
+    simulate_internal_service_call,
+    simulate_internal_service_call_from_files,
+    verify_service_certificate,
+    verify_service_certificate_from_files,
 )
 
 
@@ -40,10 +21,6 @@ router = APIRouter(
 )
 
 
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 @router.get("/info")
 def get_internal_api_info():
     return {
@@ -51,126 +28,137 @@ def get_internal_api_info():
         "version": settings.SERVICE_VERSION,
         "use_case": settings.USE_CASE,
         "trust_model": settings.TRUST_MODEL,
-        "internal_domain": settings.INTERNAL_DOMAIN,
-        "pqc_enabled": True,
-        "kem_algorithm": settings.KEM_ALGORITHM,
-        "signature_algorithm": settings.SIGNATURE_ALGORITHM,
+        "role": "internal-api-certificate-consumer",
+        "default_calling_service_subject": settings.CALLING_SERVICE_DEFAULT_SUBJECT,
+        "default_target_api": settings.TARGET_API_DEFAULT_NAME,
     }
 
 
 @router.get("/scenario")
 def get_internal_api_scenario():
     return {
-        "title": "Internal APIs and Microservices with Post-Quantum Cryptography",
+        "title": "Internal APIs and Microservices with PQC Certificate Validation",
         "summary": (
-            "This API simulates internal service-to-service communication "
-            "inside a corporate microservices environment using "
-            "post-quantum cryptographic primitives."
+            "This API simulates a service-to-service request inside a private "
+            "microservices environment. The calling service presents an X.509 "
+            "PQC certificate issued by the internal CA, and the target API "
+            "verifies that identity before accepting the request."
         ),
-        "classical_baseline": {
-            "authentication": "JWT, API keys or classical signatures",
-            "trust_model": "private-trust",
-            "service_identity": "internal certificates or tokens",
+        "actors": {
+            "calling_service": "Example: billing-service.",
+            "target_api": "Example: customer-api.",
+            "internal_ca": "Private PQC certificate authority that issued the service certificate.",
         },
-        "pqc_transition": {
-            "service_identity": "ML-DSA signatures",
-            "shared_secret_establishment": "ML-KEM",
-            "deployment_scope": "internal APIs and microservices",
-        },
-        "academic_scope": {
-            "implemented": [
-                "PQC service identities",
-                "Signed internal API requests",
-                "Verification of internal requests",
-                "ML-KEM shared secret establishment",
-                "Repeated sign/verify latency metrics",
-            ],
-            "not_implemented": [
-                "Real JWT infrastructure",
-                "OAuth2",
-                "mTLS",
-                "Service mesh integration",
-                "Kubernetes integration",
-            ],
-        },
+        "flow": [
+            "The calling service attempts to access an internal API.",
+            "The calling service presents its X.509 PQC certificate.",
+            "The target API verifies the certificate against the internal CA certificate.",
+            "The target API checks that the certificate subject matches the expected service identity.",
+            "The target API checks whether the requested action is allowed.",
+            "If all checks succeed, the internal API call is accepted.",
+        ],
+        "scope_note": (
+            "This is not mTLS and does not implement a real service mesh. "
+            "It is an academic simulation of application-level service identity "
+            "validation using PQC X.509 certificates."
+        ),
     }
 
 
-@router.get("/algorithms")
-def list_enabled_algorithms():
-    return get_enabled_algorithms()
+@router.post(
+    "/verify-service-certificate",
+    response_model=VerifyServiceCertificateResponse,
+)
+def verify_service_certificate_endpoint(request: VerifyServiceCertificateRequest):
+    try:
+        return verify_service_certificate(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/service/generate", response_model=ServiceIdentityResponse)
-def create_service_identity(request: ServiceIdentityRequest):
-    return generate_service_identity(
-        service_id=request.service_id,
-        service_role=request.service_role,
-    )
+@router.post(
+    "/demo/service-call",
+    response_model=ServiceCallResponse,
+)
+def demo_service_call(request: ServiceCallRequest):
+    try:
+        return simulate_internal_service_call(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/request/sign", response_model=SignedInternalApiRequest)
-def create_signed_internal_request(request: SignInternalRequestInput):
-    return sign_internal_request(request)
-
-
-@router.post("/request/verify", response_model=VerifyInternalRequestResponse)
-def verify_signed_internal_request(request: VerifyInternalRequestInput):
-    return verify_internal_request(
-        signed_request=request.signed_request,
-        service_public_key_b64=request.service_public_key_b64,
-        expected_target_api=request.expected_target_api,
-        allowed_actions=request.allowed_actions,
-    )
-
-
-@router.post("/session/keypair", response_model=KemKeypairResponse)
-def create_kem_keypair():
-    result = generate_kem_keypair()
-
-    return {
-        "kem_algorithm": result["kem_algorithm"],
-        "public_key_b64": result["public_key_b64"],
-        "private_key_b64": result["private_key_b64"],
-        "generated_at": _now_utc(),
-    }
-
-
-@router.post("/session/encapsulate", response_model=EncapsulateResponse)
-def create_session_secret(request: EncapsulateRequest):
-    result = encapsulate_secret(request.public_key_b64)
-
-    return {
-        "kem_algorithm": result["kem_algorithm"],
-        "ciphertext_b64": result["ciphertext_b64"],
-        "shared_secret_b64": result["shared_secret_b64"],
-        "encapsulation_time_ms": result["encapsulation_time_ms"],
-        "encapsulated_at": _now_utc(),
-    }
-
-
-@router.post("/session/decapsulate", response_model=DecapsulateResponse)
-def recover_session_secret(request: DecapsulateRequest):
-    result = decapsulate_secret(
-        private_key_b64=request.private_key_b64,
-        ciphertext_b64=request.ciphertext_b64,
-    )
-
-    return {
-        "kem_algorithm": result["kem_algorithm"],
-        "shared_secret_b64": result["shared_secret_b64"],
-        "decapsulation_time_ms": result["decapsulation_time_ms"],
-        "decapsulated_at": _now_utc(),
-    }
-
-
-@router.get("/metrics")
-def get_metrics(
-    iterations: int = Query(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of repeated sign/verify operations.",
-    )
+@router.post(
+    "/verify-service-certificate-file",
+    response_model=VerifyServiceCertificateResponse,
+)
+async def verify_service_certificate_file(
+    expected_service_subject: str = Form("billing-service.local"),
+    ca_certificate_file: UploadFile = File(...),
+    service_certificate_file: UploadFile = File(...),
 ):
-    return get_internal_api_metrics(iterations=iterations)
+    """
+    Verify a calling service certificate using uploaded PEM files.
+    """
+
+    try:
+        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
+        service_certificate_pem = (
+            await service_certificate_file.read()
+        ).decode("utf-8")
+
+        return verify_service_certificate_from_files(
+            ca_certificate_pem=ca_certificate_pem,
+            service_certificate_pem=service_certificate_pem,
+            expected_service_subject=expected_service_subject,
+        )
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/demo/service-call-file",
+    response_model=ServiceCallResponse,
+)
+async def demo_service_call_file(
+    calling_service: str = Form("billing-service"),
+    target_api: str = Form("customer-api"),
+    action: str = Form("read_customer_profile"),
+    resource: str = Form("/customers/123"),
+    allowed_actions: str = Form("read_customer_profile"),
+    expected_service_subject: str = Form("billing-service.local"),
+    ca_certificate_file: UploadFile = File(...),
+    service_certificate_file: UploadFile = File(...),
+):
+    """
+    Simulate an internal API-to-API call using uploaded PEM certificates.
+
+    allowed_actions must be provided as a comma-separated string, for example:
+    read_customer_profile,read_invoice
+    """
+
+    try:
+        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
+        service_certificate_pem = (
+            await service_certificate_file.read()
+        ).decode("utf-8")
+
+        allowed_actions_list = [
+            item.strip()
+            for item in allowed_actions.split(",")
+            if item.strip()
+        ]
+
+        return simulate_internal_service_call_from_files(
+            calling_service=calling_service,
+            target_api=target_api,
+            action=action,
+            resource=resource,
+            allowed_actions=allowed_actions_list,
+            ca_certificate_pem=ca_certificate_pem,
+            service_certificate_pem=service_certificate_pem,
+            expected_service_subject=expected_service_subject,
+        )
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
