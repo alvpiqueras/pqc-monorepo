@@ -1,36 +1,36 @@
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, HTTPException, UploadFile, Query
 
 from core.config import settings
-from models.request_models import (
-    SignInternalRequestInput,
-    SignedInternalApiRequest,
-    VerifyInternalRequestInput,
-    VerifyInternalRequestResponse,
+
+from models.internal_api_models import (
+    AuthorizationCheckByIdRequest,
+    AuthorizationCheckResponse,
+    SecureServiceCallByIdRequest,
+    SecureServiceCallResponse,
+    ServiceCallByIdRequest,
+    ServiceCallWithPolicyResponse,
+    VerifyServiceCertificateByIdRequest,
+    VerifyServiceCertificateResponse,
 )
-from models.service_models import (
-    ServiceIdentityRequest,
-    ServiceIdentityResponse,
+
+from models.artifact_models import (
+    ArtifactInfoResponse,
+    StoredArtifactResponse,
+    StoredPolicyResponse,
 )
-from models.session_models import (
-    DecapsulateRequest,
-    DecapsulateResponse,
-    EncapsulateRequest,
-    EncapsulateResponse,
-    KemKeypairResponse,
+
+from services.certificate_verification_service import (
+    check_authorization_by_policy_id,
+    simulate_internal_service_call_by_artifact_ids,
+    simulate_secure_internal_service_call_by_artifact_ids,
+    verify_service_certificate_by_artifact_ids,
 )
-from services.internal_request_service import (
-    generate_service_identity,
-    sign_internal_request,
-    verify_internal_request,
-)
-from services.metrics_service import get_internal_api_metrics
-from services.pqc_service import (
-    decapsulate_secret,
-    encapsulate_secret,
-    generate_kem_keypair,
-    get_enabled_algorithms,
+
+from services.artifact_storage_service import (
+    get_artifact_info,
+    store_authorization_policy,
+    store_ca_certificate,
+    store_service_certificate,
 )
 
 
@@ -40,10 +40,6 @@ router = APIRouter(
 )
 
 
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 @router.get("/info")
 def get_internal_api_info():
     return {
@@ -51,126 +47,272 @@ def get_internal_api_info():
         "version": settings.SERVICE_VERSION,
         "use_case": settings.USE_CASE,
         "trust_model": settings.TRUST_MODEL,
-        "internal_domain": settings.INTERNAL_DOMAIN,
-        "pqc_enabled": True,
-        "kem_algorithm": settings.KEM_ALGORITHM,
-        "signature_algorithm": settings.SIGNATURE_ALGORITHM,
+        "role": "internal-api-certificate-consumer",
+        "default_calling_service_subject": settings.CALLING_SERVICE_DEFAULT_SUBJECT,
+        "default_target_api": settings.TARGET_API_DEFAULT_NAME,
     }
 
 
 @router.get("/scenario")
 def get_internal_api_scenario():
     return {
-        "title": "Internal APIs and Microservices with Post-Quantum Cryptography",
+        "title": "Internal APIs and Microservices with PQC Certificate Validation",
         "summary": (
-            "This API simulates internal service-to-service communication "
-            "inside a corporate microservices environment using "
-            "post-quantum cryptographic primitives."
+            "This API simulates a service-to-service request inside a private "
+            "microservices environment. The calling service presents an X.509 "
+            "PQC certificate issued by the internal CA, and the target API "
+            "verifies that identity before accepting the request."
         ),
-        "classical_baseline": {
-            "authentication": "JWT, API keys or classical signatures",
-            "trust_model": "private-trust",
-            "service_identity": "internal certificates or tokens",
+        "actors": {
+            "calling_service": "Example: billing-service.",
+            "target_api": "Example: customer-api.",
+            "internal_ca": "Private PQC certificate authority that issued the service certificate.",
         },
-        "pqc_transition": {
-            "service_identity": "ML-DSA signatures",
-            "shared_secret_establishment": "ML-KEM",
-            "deployment_scope": "internal APIs and microservices",
-        },
-        "academic_scope": {
-            "implemented": [
-                "PQC service identities",
-                "Signed internal API requests",
-                "Verification of internal requests",
-                "ML-KEM shared secret establishment",
-                "Repeated sign/verify latency metrics",
-            ],
-            "not_implemented": [
-                "Real JWT infrastructure",
-                "OAuth2",
-                "mTLS",
-                "Service mesh integration",
-                "Kubernetes integration",
-            ],
-        },
+        "flow": [
+            "The calling service attempts to access an internal API.",
+            "The calling service presents its X.509 PQC certificate.",
+            "The target API verifies the certificate against the internal CA certificate.",
+            "The target API checks that the certificate subject matches the expected service identity.",
+            "The target API checks whether the requested action is allowed.",
+            "If all checks succeed, the internal API call is accepted.",
+        ],
+        "scope_note": (
+            "This is not mTLS and does not implement a real service mesh. "
+            "It is an academic simulation of application-level service identity "
+            "validation using PQC X.509 certificates."
+        ),
     }
 
 
-@router.get("/algorithms")
-def list_enabled_algorithms():
-    return get_enabled_algorithms()
-
-
-@router.post("/service/generate", response_model=ServiceIdentityResponse)
-def create_service_identity(request: ServiceIdentityRequest):
-    return generate_service_identity(
-        service_id=request.service_id,
-        service_role=request.service_role,
-    )
-
-
-@router.post("/request/sign", response_model=SignedInternalApiRequest)
-def create_signed_internal_request(request: SignInternalRequestInput):
-    return sign_internal_request(request)
-
-
-@router.post("/request/verify", response_model=VerifyInternalRequestResponse)
-def verify_signed_internal_request(request: VerifyInternalRequestInput):
-    return verify_internal_request(
-        signed_request=request.signed_request,
-        service_public_key_b64=request.service_public_key_b64,
-        expected_target_api=request.expected_target_api,
-        allowed_actions=request.allowed_actions,
-    )
-
-
-@router.post("/session/keypair", response_model=KemKeypairResponse)
-def create_kem_keypair():
-    result = generate_kem_keypair()
-
-    return {
-        "kem_algorithm": result["kem_algorithm"],
-        "public_key_b64": result["public_key_b64"],
-        "private_key_b64": result["private_key_b64"],
-        "generated_at": _now_utc(),
-    }
-
-
-@router.post("/session/encapsulate", response_model=EncapsulateResponse)
-def create_session_secret(request: EncapsulateRequest):
-    result = encapsulate_secret(request.public_key_b64)
-
-    return {
-        "kem_algorithm": result["kem_algorithm"],
-        "ciphertext_b64": result["ciphertext_b64"],
-        "shared_secret_b64": result["shared_secret_b64"],
-        "encapsulation_time_ms": result["encapsulation_time_ms"],
-        "encapsulated_at": _now_utc(),
-    }
-
-
-@router.post("/session/decapsulate", response_model=DecapsulateResponse)
-def recover_session_secret(request: DecapsulateRequest):
-    result = decapsulate_secret(
-        private_key_b64=request.private_key_b64,
-        ciphertext_b64=request.ciphertext_b64,
-    )
-
-    return {
-        "kem_algorithm": result["kem_algorithm"],
-        "shared_secret_b64": result["shared_secret_b64"],
-        "decapsulation_time_ms": result["decapsulation_time_ms"],
-        "decapsulated_at": _now_utc(),
-    }
-
-
-@router.get("/metrics")
-def get_metrics(
-    iterations: int = Query(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of repeated sign/verify operations.",
-    )
+@router.post(
+    "/artifacts/ca-certificate",
+    response_model=StoredArtifactResponse,
+)
+async def upload_ca_certificate_artifact(
+    ca_certificate_file: UploadFile = File(...),
 ):
-    return get_internal_api_metrics(iterations=iterations)
+    """
+    Store an internal CA certificate artifact.
+
+    This endpoint prepares the backend for frontend-oriented workflows where
+    certificates are uploaded once and then referenced by ID.
+    """
+
+    try:
+        content = await ca_certificate_file.read()
+
+        return store_ca_certificate(
+            filename=ca_certificate_file.filename or "ca-certificate.pem",
+            content=content,
+        )
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/artifacts/service-certificate",
+    response_model=StoredArtifactResponse,
+)
+async def upload_service_certificate_artifact(
+    service_certificate_file: UploadFile = File(...),
+):
+    """
+    Store a calling service certificate artifact.
+    """
+
+    try:
+        content = await service_certificate_file.read()
+
+        return store_service_certificate(
+            filename=service_certificate_file.filename or "service-certificate.pem",
+            content=content,
+        )
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/artifacts/authorization-policy",
+    response_model=StoredPolicyResponse,
+)
+async def upload_authorization_policy_artifact(
+    authorization_policy_file: UploadFile = File(...),
+):
+    """
+    Store an authorization policy JSON artifact.
+
+    Expected policy format:
+
+    {
+      "billing-service": {
+        "customer-api": [
+          "read_customer_profile"
+        ]
+      }
+    }
+    """
+
+    try:
+        content = await authorization_policy_file.read()
+
+        return store_authorization_policy(
+            filename=authorization_policy_file.filename or "policy.json",
+            content=content,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get(
+    "/artifacts/{artifact_id}",
+    response_model=ArtifactInfoResponse,
+)
+def get_artifact_metadata(
+    artifact_id: str,
+    include_preview: bool = Query(
+        default=False,
+        description="Whether to include the first characters of the stored artifact.",
+    ),
+):
+    """
+    Return metadata for a stored artifact.
+    """
+
+    try:
+        return get_artifact_info(
+            artifact_id=artifact_id,
+            include_preview=include_preview,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/identity/verify",
+    response_model=VerifyServiceCertificateResponse,
+)
+def verify_identity_by_artifact_ids(
+    request: VerifyServiceCertificateByIdRequest,
+):
+    """
+    Verify a calling service identity using stored certificate artifacts.
+
+    This endpoint represents the identity validation step in an internal
+    API-to-API flow. It uses:
+    - a stored CA certificate artifact;
+    - a stored service certificate artifact;
+    - an expected service subject.
+    """
+
+    try:
+        return verify_service_certificate_by_artifact_ids(
+            ca_artifact_id=request.ca_artifact_id,
+            service_certificate_id=request.service_certificate_id,
+            expected_service_subject=request.expected_service_subject,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
+
+@router.post(
+    "/authorization/check",
+    response_model=AuthorizationCheckResponse,
+)
+def check_authorization_endpoint(request: AuthorizationCheckByIdRequest):
+    """
+    Check whether a service is authorized to perform an action using a stored policy.
+    """
+
+    try:
+        return check_authorization_by_policy_id(
+            policy_id=request.policy_id,
+            calling_service=request.calling_service,
+            target_api=request.target_api,
+            action=request.action,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
+
+@router.post(
+    "/demo/service-call-by-id",
+    response_model=ServiceCallWithPolicyResponse,
+)
+def demo_service_call_by_id(request: ServiceCallByIdRequest):
+    """
+    Simulate an internal API-to-API call using stored artifact IDs.
+    """
+
+    try:
+        return simulate_internal_service_call_by_artifact_ids(
+            ca_artifact_id=request.ca_artifact_id,
+            service_certificate_id=request.service_certificate_id,
+            policy_id=request.policy_id,
+            calling_service=request.calling_service,
+            target_api=request.target_api,
+            action=request.action,
+            resource=request.resource,
+            expected_service_subject=request.expected_service_subject,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
+
+@router.post(
+    "/demo/secure-service-call-by-id",
+    response_model=SecureServiceCallResponse,
+)
+def demo_secure_service_call_by_id(request: SecureServiceCallByIdRequest):
+    """
+    Simulate a secure internal API-to-API call using:
+    - stored CA certificate;
+    - stored service certificate;
+    - stored authorization policy;
+    - ML-KEM session establishment;
+    - AES-GCM payload protection.
+    """
+
+    try:
+        return simulate_secure_internal_service_call_by_artifact_ids(
+            ca_artifact_id=request.ca_artifact_id,
+            service_certificate_id=request.service_certificate_id,
+            policy_id=request.policy_id,
+            calling_service=request.calling_service,
+            target_api=request.target_api,
+            action=request.action,
+            resource=request.resource,
+            expected_service_subject=request.expected_service_subject,
+            plaintext_payload=request.plaintext_payload,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

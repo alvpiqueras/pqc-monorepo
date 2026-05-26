@@ -1,0 +1,16 @@
+{
+  "billing-service": {
+    "customer-api": [
+      "read_customer_profile",
+      "read_invoice_status"
+    ],
+    "orders-api": [
+      "read_order"
+    ]
+  },
+  "inventory-service": {
+    "customer-api": [
+      "read_customer_profile"
+    ]
+  }
+}
