@@ -9,6 +9,13 @@ from models.intranet_models import (
 
 
 def _run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """
+    Run a system command and capture its output.
+
+    In this API, it is mainly used to call OpenSSL commands for certificate
+    parsing and verification.
+    """
+
     return subprocess.run(
         command,
         capture_output=True,
@@ -18,12 +25,28 @@ def _run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def _write_temp_pem(directory: Path, filename: str, content: str) -> Path:
+    """
+    Write PEM content to a temporary file and return its path.
+
+    OpenSSL commands operate on files, so PEM strings received through the API
+    are temporarily written to disk during the verification process.
+    """
+
     path = directory / filename
     path.write_text(content, encoding="utf-8")
     return path
 
 
 def _extract_certificate_field(cert_path: Path, field: str) -> str:
+    """
+    Extract a certificate field using OpenSSL.
+
+    Example fields:
+    - "-subject"
+    - "-issuer"
+    - "-dates"
+    """
+
     result = _run_command(
         [
             "openssl",
@@ -48,8 +71,14 @@ def verify_intranet_certificate(
     Verify an intranet server certificate against the provided internal CA.
 
     This simulates what an internal client would do when connecting to an
-    HTTPS intranet service: validate the presented server certificate against
-    a private trust anchor and check the expected server identity.
+    HTTPS intranet service:
+
+    1. Receive the server certificate.
+    2. Verify that it chains to the internal CA.
+    3. Check that the certificate subject matches the expected intranet identity.
+
+    This is not a full production TLS implementation. It is an academic
+    simulation of the certificate validation step in a Private Trust intranet.
     """
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -60,6 +89,7 @@ def verify_intranet_certificate(
             "internal_ca.cert.pem",
             request.ca_certificate_pem,
         )
+
         server_path = _write_temp_pem(
             temp_path,
             "intranet_server.cert.pem",
@@ -87,11 +117,19 @@ def verify_intranet_certificate(
         valid = openssl_valid and subject_matches
 
         if not openssl_valid:
-            reason = "Server certificate could not be verified against the provided internal CA."
+            reason = (
+                "Server certificate could not be verified against the provided "
+                "internal CA."
+            )
         elif not subject_matches:
-            reason = "Server certificate is valid, but its subject does not match the expected intranet identity."
+            reason = (
+                "Server certificate is valid, but its subject does not match "
+                "the expected intranet identity."
+            )
         else:
-            reason = "Server certificate is valid for the expected intranet identity."
+            reason = (
+                "Server certificate is valid for the expected intranet identity."
+            )
 
         return {
             "valid": valid,
@@ -124,22 +162,34 @@ def simulate_intranet_connection(request: IntranetConnectRequest) -> dict:
     connection_allowed = bool(verification["valid"])
 
     steps = [
-        f"Client '{request.client_id}' requests access to '{request.requested_resource}'.",
+        f"Client '{request.client_id}' requests access to "
+        f"'{request.requested_resource}'.",
         "The intranet server presents an X.509 PQC certificate.",
         "The client verifies the certificate against the internal CA certificate.",
-        "The client checks that the certificate subject matches the expected intranet identity.",
+        "The client checks that the certificate subject matches the expected "
+        "intranet identity.",
     ]
 
     if connection_allowed:
-        steps.append("Certificate validation succeeded. Access to the private intranet resource is granted.")
+        steps.append(
+            "Certificate validation succeeded. Access to the private intranet "
+            "resource is granted."
+        )
+
         resource_response = {
             "resource": request.requested_resource,
             "message": "Private intranet resource accessed successfully.",
             "classification": "internal-only",
         }
+
         reason = "Connection allowed."
+
     else:
-        steps.append("Certificate validation failed. Access to the private intranet resource is denied.")
+        steps.append(
+            "Certificate validation failed. Access to the private intranet "
+            "resource is denied."
+        )
+
         resource_response = None
         reason = "Connection denied."
 
@@ -153,6 +203,7 @@ def simulate_intranet_connection(request: IntranetConnectRequest) -> dict:
         "resource_response": resource_response,
     }
 
+
 def verify_intranet_certificate_from_files(
     ca_certificate_pem: str,
     server_certificate_pem: str,
@@ -160,6 +211,8 @@ def verify_intranet_certificate_from_files(
 ) -> dict:
     """
     Verify an intranet server certificate using uploaded PEM file contents.
+
+    This helper is used by the file-upload legacy endpoint.
     """
 
     return verify_intranet_certificate(
@@ -180,6 +233,8 @@ def simulate_intranet_connection_from_files(
 ) -> dict:
     """
     Simulate an intranet connection using uploaded CA/server certificate files.
+
+    This helper is used by the file-upload legacy endpoint.
     """
 
     return simulate_intranet_connection(

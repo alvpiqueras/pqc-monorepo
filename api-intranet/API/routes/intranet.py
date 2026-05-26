@@ -1,18 +1,6 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter
 
 from core.config import settings
-from models.intranet_models import (
-    IntranetConnectRequest,
-    IntranetConnectResponse,
-    VerifyIntranetCertificateRequest,
-    VerifyIntranetCertificateResponse,
-)
-from services.certificate_verification_service import (
-    simulate_intranet_connection,
-    verify_intranet_certificate,
-    simulate_intranet_connection_from_files,
-    verify_intranet_certificate_from_files,
-)
 
 
 router = APIRouter(
@@ -30,6 +18,17 @@ def intranet_info():
         "trust_model": settings.TRUST_MODEL,
         "role": "private-intranet-service-certificate-consumer",
         "expected_server_identity": settings.DEFAULT_EXPECTED_SUBJECT,
+        "active_flow": [
+            "POST /intranet/artifacts/ca-certificate",
+            "POST /intranet/artifacts/server-certificate",
+            "POST /intranet/identity/verify",
+            "POST /intranet/demo/https-connection",
+            "POST /intranet/demo/secure-https-connection",
+        ],
+        "legacy_note": (
+            "Direct PEM-based verification functions remain internally available "
+            "in the backend, but are not exposed as public API endpoints."
+        ),
     }
 
 
@@ -38,109 +37,37 @@ def intranet_scenario():
     return {
         "title": "Private Intranet HTTPS with PQC X.509 Certificate Validation",
         "summary": (
-            "This API simulates an internal client connecting to a private "
-            "intranet service. The intranet server presents an X.509 certificate "
-            "issued by the internal PQC CA, and the client verifies it before "
-            "accessing an internal resource."
+            "This API simulates an internal corporate client connecting to a "
+            "private intranet HTTPS portal. The portal presents an X.509 PQC "
+            "server certificate issued by an internal CA, and the client validates "
+            "that certificate before trusting the connection."
         ),
         "actors": {
-            "internal_client": "Employee, browser or corporate device inside the private network.",
-            "intranet_server": "Private internal HTTPS service such as intranet.local.",
+            "internal_client": "Employee browser or corporate device inside the private network.",
+            "intranet_server": "Private internal HTTPS portal such as intranet.local.",
             "internal_ca": "Private PQC certificate authority that issued the server certificate.",
         },
         "flow": [
             "The internal client requests access to intranet.local.",
             "The intranet server presents its X.509 PQC certificate.",
-            "The client validates the certificate against the internal CA certificate.",
+            "The client validates the certificate against the registered internal CA artifact.",
             "The client checks that the certificate subject matches the expected intranet identity.",
-            "If verification succeeds, access to the private resource is allowed.",
+            "If verification succeeds, a server-authenticated HTTPS session is simulated.",
+            "Application data can then be encrypted with AES-GCM in the demo channel.",
         ],
+        "cryptographic_scope": {
+            "pqc_used_for": "Server certificate and certificate-chain validation.",
+            "pqc_not_used_for": (
+                "This API does not perform ML-KEM/PQC key exchange. That is left "
+                "for more advanced scenarios such as api-mTLS."
+            ),
+            "symmetric_protection": (
+                "AES-256-GCM is used only to simulate protected HTTPS application data."
+            ),
+        },
         "scope_note": (
             "This is not a production TLS implementation. It is an academic "
-            "simulation of the certificate validation logic that appears in an "
-            "internal HTTPS flow."
+            "simulation of the trust and protected-channel logic that appears in "
+            "an internal HTTPS flow."
         ),
     }
-
-
-@router.post(
-    "/verify-certificate",
-    response_model=VerifyIntranetCertificateResponse,
-)
-def verify_certificate(request: VerifyIntranetCertificateRequest):
-    try:
-        return verify_intranet_certificate(request)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post(
-    "/demo/connect",
-    response_model=IntranetConnectResponse,
-)
-def demo_connect(request: IntranetConnectRequest):
-    try:
-        return simulate_intranet_connection(request)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    
-@router.post(
-    "/verify-certificate-file",
-    response_model=VerifyIntranetCertificateResponse,
-)
-async def verify_certificate_file(
-    expected_subject: str = Form("intranet.local"),
-    ca_certificate_file: UploadFile = File(...),
-    server_certificate_file: UploadFile = File(...),
-):
-    """
-    Verify an intranet server certificate using uploaded PEM files.
-
-    Upload:
-    - internal CA certificate PEM;
-    - intranet server certificate PEM.
-    """
-
-    try:
-        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
-        server_certificate_pem = (await server_certificate_file.read()).decode("utf-8")
-
-        return verify_intranet_certificate_from_files(
-            ca_certificate_pem=ca_certificate_pem,
-            server_certificate_pem=server_certificate_pem,
-            expected_subject=expected_subject,
-        )
-
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-@router.post(
-    "/demo/connect-file",
-    response_model=IntranetConnectResponse,
-)
-async def demo_connect_file(
-    client_id: str = Form("employee-001"),
-    requested_resource: str = Form("/dashboard"),
-    expected_subject: str = Form("intranet.local"),
-    ca_certificate_file: UploadFile = File(...),
-    server_certificate_file: UploadFile = File(...),
-):
-    """
-    Simulate an internal client connecting to the intranet using uploaded
-    CA/server certificate PEM files.
-    """
-
-    try:
-        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
-        server_certificate_pem = (await server_certificate_file.read()).decode("utf-8")
-
-        return simulate_intranet_connection_from_files(
-            client_id=client_id,
-            requested_resource=requested_resource,
-            ca_certificate_pem=ca_certificate_pem,
-            server_certificate_pem=server_certificate_pem,
-            expected_subject=expected_subject,
-        )
-
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))    

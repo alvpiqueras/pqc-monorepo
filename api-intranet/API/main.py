@@ -2,25 +2,25 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from routes.intranet import router as intranet_router
 
+from routes.intranet import router as intranet_router
+from routes.artifacts import router as artifacts_router
+from routes.identity import router as identity_router
+from routes.demo import router as demo_router
+
+
+
+app = FastAPI(
+    title="API Intranet",
+    description="Academic simulation of internal HTTPS trust using PQC X.509 certificates.",
+    version=settings.SERVICE_VERSION,
+)
 
 allowed_origins = (
     ["*"]
     if settings.ALLOWED_ORIGINS == "*"
     else settings.ALLOWED_ORIGINS.split(",")
 )
-
-
-app = FastAPI(
-    title="Private Intranet HTTPS",
-    version=settings.SERVICE_VERSION,
-    description=(
-        "Academic simulation of an internal HTTPS intranet service consuming "
-        "PQC X.509 certificates issued by an internal CA."
-    ),
-)
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,7 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/", tags=["General"])
 def root():
@@ -53,3 +52,6 @@ def health_check():
 
 
 app.include_router(intranet_router)
+app.include_router(artifacts_router)
+app.include_router(identity_router)
+app.include_router(demo_router)
