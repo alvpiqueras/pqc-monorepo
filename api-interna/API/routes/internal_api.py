@@ -36,11 +36,13 @@ from services.artifact_storage_service import (
 
 router = APIRouter(
     prefix="/internal-api",
-    tags=["Internal APIs"],
 )
 
 
-@router.get("/info")
+@router.get(
+    "/info",
+    tags=["Internal API - Overview"],
+)
 def get_internal_api_info():
     return {
         "service_name": settings.SERVICE_NAME,
@@ -53,7 +55,10 @@ def get_internal_api_info():
     }
 
 
-@router.get("/scenario")
+@router.get(
+    "/scenario",
+    tags=["Internal API - Overview"],
+)
 def get_internal_api_scenario():
     return {
         "title": "Internal APIs and Microservices with PQC Certificate Validation",
@@ -87,6 +92,7 @@ def get_internal_api_scenario():
 @router.post(
     "/artifacts/ca-certificate",
     response_model=StoredArtifactResponse,
+    tags=["Artifacts"],
 )
 async def upload_ca_certificate_artifact(
     ca_certificate_file: UploadFile = File(...),
@@ -113,6 +119,7 @@ async def upload_ca_certificate_artifact(
 @router.post(
     "/artifacts/service-certificate",
     response_model=StoredArtifactResponse,
+    tags=["Artifacts"],
 )
 async def upload_service_certificate_artifact(
     service_certificate_file: UploadFile = File(...),
@@ -136,6 +143,7 @@ async def upload_service_certificate_artifact(
 @router.post(
     "/artifacts/authorization-policy",
     response_model=StoredPolicyResponse,
+    tags=["Artifacts"],
 )
 async def upload_authorization_policy_artifact(
     authorization_policy_file: UploadFile = File(...),
@@ -171,6 +179,7 @@ async def upload_authorization_policy_artifact(
 @router.get(
     "/artifacts/{artifact_id}",
     response_model=ArtifactInfoResponse,
+    tags=["Artifacts"],
 )
 def get_artifact_metadata(
     artifact_id: str,
@@ -200,6 +209,7 @@ def get_artifact_metadata(
 @router.post(
     "/identity/verify",
     response_model=VerifyServiceCertificateResponse,
+    tags=["Identity"],
 )
 def verify_identity_by_artifact_ids(
     request: VerifyServiceCertificateByIdRequest,
@@ -227,11 +237,12 @@ def verify_identity_by_artifact_ids(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    
+
 
 @router.post(
     "/authorization/check",
     response_model=AuthorizationCheckResponse,
+    tags=["Authorization"],
 )
 def check_authorization_endpoint(request: AuthorizationCheckByIdRequest):
     """
@@ -252,11 +263,12 @@ def check_authorization_endpoint(request: AuthorizationCheckByIdRequest):
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    
+
 
 @router.post(
     "/demo/service-call-by-id",
     response_model=ServiceCallWithPolicyResponse,
+    tags=["Internal API - Demo"],
 )
 def demo_service_call_by_id(request: ServiceCallByIdRequest):
     """
@@ -281,11 +293,12 @@ def demo_service_call_by_id(request: ServiceCallByIdRequest):
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    
+
 
 @router.post(
     "/demo/secure-service-call-by-id",
     response_model=SecureServiceCallResponse,
+    tags=["Internal API - Demo"],
 )
 def demo_secure_service_call_by_id(request: SecureServiceCallByIdRequest):
     """

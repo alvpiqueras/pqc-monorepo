@@ -32,11 +32,13 @@ from services.openssl_service import (
 
 router = APIRouter(
     prefix="/ca",
-    tags=["Internal CA"],
 )
 
 
-@router.get("/info")
+@router.get(
+    "/info",
+    tags=["Internal CA - Overview"],
+)
 def ca_info():
     """
     Return basic information about the internal PQC CA.
@@ -52,7 +54,10 @@ def ca_info():
     }
 
 
-@router.get("/scenario")
+@router.get(
+    "/scenario",
+    tags=["Internal CA - Overview"],
+)
 def ca_scenario():
     """
     Explain the role of this component inside the PQC migration laboratory.
@@ -86,7 +91,10 @@ def ca_scenario():
     }
 
 
-@router.get("/algorithms")
+@router.get(
+    "/algorithms",
+    tags=["Internal CA - Overview"],
+)
 def ca_algorithms():
     """
     Return the signature algorithms exposed by this first internal CA version.
@@ -122,7 +130,11 @@ def ca_algorithms():
     }
 
 
-@router.post("/generate", response_model=GenerateCaResponse)
+@router.post(
+    "/generate",
+    response_model=GenerateCaResponse,
+    tags=["Authority"],
+)
 def generate_ca(request: GenerateCaRequest):
     """
     Generate an internal PQC CA.
@@ -139,7 +151,35 @@ def generate_ca(request: GenerateCaRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/csr/generate", response_model=GenerateCsrResponse)
+@router.get(
+    "/{ca_id}/download",
+    tags=["Authority"],
+)
+def download_ca_certificate(ca_id: str):
+    """
+    Download the internal CA certificate as a PEM file.
+    """
+
+    try:
+        certificate_path = get_ca_certificate_file_path(ca_id)
+        return FileResponse(
+            path=certificate_path,
+            media_type="application/x-pem-file",
+            filename=f"{ca_id}.cert.pem",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/csr/generate",
+    response_model=GenerateCsrResponse,
+    tags=["CSR"],
+)
 def generate_csr(request: GenerateCsrRequest):
     """
     Generate a service PQC keypair and CSR.
@@ -154,8 +194,35 @@ def generate_csr(request: GenerateCsrRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get(
+    "/csr/{csr_id}/download",
+    tags=["CSR"],
+)
+def download_csr(csr_id: str):
+    """
+    Download a generated CSR as a PEM file.
+    """
 
-@router.post("/certificate/issue", response_model=IssueCertificateResponse)
+    try:
+        request_path = get_csr_file_path(csr_id)
+        return FileResponse(
+            path=request_path,
+            media_type="application/x-pem-file",
+            filename=f"{csr_id}.csr.pem",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/certificate/issue",
+    response_model=IssueCertificateResponse,
+    tags=["Certificates"],
+)
 def issue_certificate(request: IssueCertificateRequest):
     """
     Issue an X.509 certificate from a previously generated CSR.
@@ -170,9 +237,11 @@ def issue_certificate(request: IssueCertificateRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+
 @router.post(
     "/certificate/issue-from-csr-file",
     response_model=IssueCertificateFromFileResponse,
+    tags=["Certificates"],
 )
 async def issue_certificate_from_csr_file(
     ca_id: str = Form(...),
@@ -198,9 +267,13 @@ async def issue_certificate_from_csr_file(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-    
 
-@router.post("/certificate/verify", response_model=VerifyCertificateResponse)
+
+@router.post(
+    "/certificate/verify",
+    response_model=VerifyCertificateResponse,
+    tags=["Certificates"],
+)
 def verify_issued_certificate(request: VerifyCertificateRequest):
     """
     Verify an issued certificate against the selected internal CA.
@@ -219,6 +292,7 @@ def verify_issued_certificate(request: VerifyCertificateRequest):
 @router.get(
     "/certificate/{certificate_id}/inspect",
     response_model=CertificateInfoResponse,
+    tags=["Certificates"],
 )
 def inspect_issued_certificate(certificate_id: str):
     """
@@ -235,7 +309,10 @@ def inspect_issued_certificate(certificate_id: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.get("/certificate/{certificate_id}/download")
+@router.get(
+    "/certificate/{certificate_id}/download",
+    tags=["Certificates"],
+)
 def download_issued_certificate(certificate_id: str):
     """
     Download an issued certificate as a PEM file.
@@ -256,50 +333,10 @@ def download_issued_certificate(certificate_id: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.get("/{ca_id}/download")
-def download_ca_certificate(ca_id: str):
-    """
-    Download the internal CA certificate as a PEM file.
-    """
-
-    try:
-        certificate_path = get_ca_certificate_file_path(ca_id)
-        return FileResponse(
-            path=certificate_path,
-            media_type="application/x-pem-file",
-            filename=f"{ca_id}.cert.pem",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.get("/csr/{csr_id}/download")
-def download_csr(csr_id: str):
-    """
-    Download a generated CSR as a PEM file.
-    """
-
-    try:
-        request_path = get_csr_file_path(csr_id)
-        return FileResponse(
-            path=request_path,
-            media_type="application/x-pem-file",
-            filename=f"{csr_id}.csr.pem",
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    
 @router.get(
     "/metrics/demo",
     response_model=CaMetricsDemoResponse,
+    tags=["Internal CA - Metrics"],
 )
 def get_ca_metrics_demo(
     signature_algorithm: str = Query(
