@@ -4,4 +4,5 @@ pydantic
 pydantic_settings
 python-dotenv
 python-multipart
+cryptography==45.0.7
 liboqs-python

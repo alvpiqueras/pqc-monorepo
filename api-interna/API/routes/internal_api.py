@@ -1,19 +1,36 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Query
 
 from core.config import settings
+
 from models.internal_api_models import (
-    ServiceCallRequest,
-    ServiceCallResponse,
-    VerifyServiceCertificateRequest,
-    VerifyServiceCertificateResponse,
+    AuthorizationCheckByIdRequest,
+    AuthorizationCheckResponse,
+    SecureServiceCallByIdRequest,
+    SecureServiceCallResponse,
+    ServiceCallByIdRequest,
     ServiceCallWithPolicyResponse,
+    VerifyServiceCertificateByIdRequest,
+    VerifyServiceCertificateResponse,
 )
+
+from models.artifact_models import (
+    ArtifactInfoResponse,
+    StoredArtifactResponse,
+    StoredPolicyResponse,
+)
+
 from services.certificate_verification_service import (
-    simulate_internal_service_call,
-    simulate_internal_service_call_from_files,
-    verify_service_certificate,
-    verify_service_certificate_from_files,
-    simulate_internal_service_call_with_policy_from_files,
+    check_authorization_by_policy_id,
+    simulate_internal_service_call_by_artifact_ids,
+    simulate_secure_internal_service_call_by_artifact_ids,
+    verify_service_certificate_by_artifact_ids,
+)
+
+from services.artifact_storage_service import (
+    get_artifact_info,
+    store_authorization_policy,
+    store_ca_certificate,
+    store_service_certificate,
 )
 
 
@@ -68,50 +85,25 @@ def get_internal_api_scenario():
 
 
 @router.post(
-    "/verify-service-certificate",
-    response_model=VerifyServiceCertificateResponse,
+    "/artifacts/ca-certificate",
+    response_model=StoredArtifactResponse,
 )
-def verify_service_certificate_endpoint(request: VerifyServiceCertificateRequest):
-    try:
-        return verify_service_certificate(request)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post(
-    "/demo/service-call",
-    response_model=ServiceCallResponse,
-)
-def demo_service_call(request: ServiceCallRequest):
-    try:
-        return simulate_internal_service_call(request)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post(
-    "/verify-service-certificate-file",
-    response_model=VerifyServiceCertificateResponse,
-)
-async def verify_service_certificate_file(
-    expected_service_subject: str = Form("billing-service.local"),
+async def upload_ca_certificate_artifact(
     ca_certificate_file: UploadFile = File(...),
-    service_certificate_file: UploadFile = File(...),
 ):
     """
-    Verify a calling service certificate using uploaded PEM files.
+    Store an internal CA certificate artifact.
+
+    This endpoint prepares the backend for frontend-oriented workflows where
+    certificates are uploaded once and then referenced by ID.
     """
 
     try:
-        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
-        service_certificate_pem = (
-            await service_certificate_file.read()
-        ).decode("utf-8")
+        content = await ca_certificate_file.read()
 
-        return verify_service_certificate_from_files(
-            ca_certificate_pem=ca_certificate_pem,
-            service_certificate_pem=service_certificate_pem,
-            expected_service_subject=expected_service_subject,
+        return store_ca_certificate(
+            filename=ca_certificate_file.filename or "ca-certificate.pem",
+            content=content,
         )
 
     except Exception as exc:
@@ -119,100 +111,208 @@ async def verify_service_certificate_file(
 
 
 @router.post(
-    "/demo/service-call-file",
-    response_model=ServiceCallResponse,
+    "/artifacts/service-certificate",
+    response_model=StoredArtifactResponse,
 )
-async def demo_service_call_file(
-    calling_service: str = Form("billing-service"),
-    target_api: str = Form("customer-api"),
-    action: str = Form("read_customer_profile"),
-    resource: str = Form("/customers/123"),
-    allowed_actions: str = Form("read_customer_profile"),
-    expected_service_subject: str = Form("billing-service.local"),
-    ca_certificate_file: UploadFile = File(...),
+async def upload_service_certificate_artifact(
     service_certificate_file: UploadFile = File(...),
 ):
     """
-    Simulate an internal API-to-API call using uploaded PEM certificates.
-
-    allowed_actions must be provided as a comma-separated string, for example:
-    read_customer_profile,read_invoice
+    Store a calling service certificate artifact.
     """
 
     try:
-        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
-        service_certificate_pem = (
-            await service_certificate_file.read()
-        ).decode("utf-8")
+        content = await service_certificate_file.read()
 
-        allowed_actions_list = [
-            item.strip()
-            for item in allowed_actions.split(",")
-            if item.strip()
+        return store_service_certificate(
+            filename=service_certificate_file.filename or "service-certificate.pem",
+            content=content,
+        )
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/artifacts/authorization-policy",
+    response_model=StoredPolicyResponse,
+)
+async def upload_authorization_policy_artifact(
+    authorization_policy_file: UploadFile = File(...),
+):
+    """
+    Store an authorization policy JSON artifact.
+
+    Expected policy format:
+
+    {
+      "billing-service": {
+        "customer-api": [
+          "read_customer_profile"
         ]
+      }
+    }
+    """
 
-        return simulate_internal_service_call_from_files(
-            calling_service=calling_service,
-            target_api=target_api,
-            action=action,
-            resource=resource,
-            allowed_actions=allowed_actions_list,
-            ca_certificate_pem=ca_certificate_pem,
-            service_certificate_pem=service_certificate_pem,
-            expected_service_subject=expected_service_subject,
+    try:
+        content = await authorization_policy_file.read()
+
+        return store_authorization_policy(
+            filename=authorization_policy_file.filename or "policy.json",
+            content=content,
         )
 
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get(
+    "/artifacts/{artifact_id}",
+    response_model=ArtifactInfoResponse,
+)
+def get_artifact_metadata(
+    artifact_id: str,
+    include_preview: bool = Query(
+        default=False,
+        description="Whether to include the first characters of the stored artifact.",
+    ),
+):
+    """
+    Return metadata for a stored artifact.
+    """
+
+    try:
+        return get_artifact_info(
+            artifact_id=artifact_id,
+            include_preview=include_preview,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post(
+    "/identity/verify",
+    response_model=VerifyServiceCertificateResponse,
+)
+def verify_identity_by_artifact_ids(
+    request: VerifyServiceCertificateByIdRequest,
+):
+    """
+    Verify a calling service identity using stored certificate artifacts.
+
+    This endpoint represents the identity validation step in an internal
+    API-to-API flow. It uses:
+    - a stored CA certificate artifact;
+    - a stored service certificate artifact;
+    - an expected service subject.
+    """
+
+    try:
+        return verify_service_certificate_by_artifact_ids(
+            ca_artifact_id=request.ca_artifact_id,
+            service_certificate_id=request.service_certificate_id,
+            expected_service_subject=request.expected_service_subject,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     
 
 @router.post(
-    "/demo/service-call-with-policy-file",
-    response_model=ServiceCallWithPolicyResponse,
+    "/authorization/check",
+    response_model=AuthorizationCheckResponse,
 )
-async def demo_service_call_with_policy_file(
-    calling_service: str = Form("billing-service"),
-    target_api: str = Form("customer-api"),
-    action: str = Form("read_customer_profile"),
-    resource: str = Form("/customers/123"),
-    expected_service_subject: str = Form("billing-service.local"),
-    ca_certificate_file: UploadFile = File(...),
-    service_certificate_file: UploadFile = File(...),
-    authorization_policy_file: UploadFile = File(...),
-):
+def check_authorization_endpoint(request: AuthorizationCheckByIdRequest):
     """
-    Simulate an internal API-to-API call using:
-    - uploaded internal CA certificate;
-    - uploaded calling service certificate;
-    - uploaded authorization policy JSON.
-
-    This endpoint demonstrates the separation between:
-    - identity, validated with a PQC X.509 certificate;
-    - authorization, validated with an external policy file;
-    - action execution, allowed only if both checks succeed.
+    Check whether a service is authorized to perform an action using a stored policy.
     """
 
     try:
-        ca_certificate_pem = (await ca_certificate_file.read()).decode("utf-8")
-        service_certificate_pem = (
-            await service_certificate_file.read()
-        ).decode("utf-8")
-        authorization_policy_json = (
-            await authorization_policy_file.read()
-        ).decode("utf-8")
-
-        return simulate_internal_service_call_with_policy_from_files(
-            calling_service=calling_service,
-            target_api=target_api,
-            action=action,
-            resource=resource,
-            ca_certificate_pem=ca_certificate_pem,
-            service_certificate_pem=service_certificate_pem,
-            expected_service_subject=expected_service_subject,
-            authorization_policy_json=authorization_policy_json,
+        return check_authorization_by_policy_id(
+            policy_id=request.policy_id,
+            calling_service=request.calling_service,
+            target_api=request.target_api,
+            action=request.action,
         )
 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
+
+@router.post(
+    "/demo/service-call-by-id",
+    response_model=ServiceCallWithPolicyResponse,
+)
+def demo_service_call_by_id(request: ServiceCallByIdRequest):
+    """
+    Simulate an internal API-to-API call using stored artifact IDs.
+    """
+
+    try:
+        return simulate_internal_service_call_by_artifact_ids(
+            ca_artifact_id=request.ca_artifact_id,
+            service_certificate_id=request.service_certificate_id,
+            policy_id=request.policy_id,
+            calling_service=request.calling_service,
+            target_api=request.target_api,
+            action=request.action,
+            resource=request.resource,
+            expected_service_subject=request.expected_service_subject,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    
+
+@router.post(
+    "/demo/secure-service-call-by-id",
+    response_model=SecureServiceCallResponse,
+)
+def demo_secure_service_call_by_id(request: SecureServiceCallByIdRequest):
+    """
+    Simulate a secure internal API-to-API call using:
+    - stored CA certificate;
+    - stored service certificate;
+    - stored authorization policy;
+    - ML-KEM session establishment;
+    - AES-GCM payload protection.
+    """
+
+    try:
+        return simulate_secure_internal_service_call_by_artifact_ids(
+            ca_artifact_id=request.ca_artifact_id,
+            service_certificate_id=request.service_certificate_id,
+            policy_id=request.policy_id,
+            calling_service=request.calling_service,
+            target_api=request.target_api,
+            action=request.action,
+            resource=request.resource,
+            expected_service_subject=request.expected_service_subject,
+            plaintext_payload=request.plaintext_payload,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
