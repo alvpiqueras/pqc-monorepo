@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     DEFAULT_CLIENT_SUBJECT: str = "billing-service.internal"
     DEFAULT_SERVER_SUBJECT: str = "customer-api.internal"
 
+    DEFAULT_KEM_ALGORITHM: str = "ML-KEM-768"
+    DEFAULT_SYMMETRIC_CIPHER: str = "AES-256-GCM"
+
     ARTIFACT_STORAGE_DIR: str = "artifacts"
 
     ALLOWED_ORIGINS: str = "*"
