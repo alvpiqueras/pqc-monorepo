@@ -1,0 +1,36 @@
+services:
+  mtls-gateway-api:
+    build:
+      context: ..
+      dockerfile: api-mTLS/gateway/Dockerfile
+    container_name: gateway
+    ports:
+      - "8010:8000"
+    environment:
+      SERVICE_NAME: "gateway"
+      INTERNAL_CA_URL: "http://internal-ca:8000"
+      CLIENT_SERVICE_URL: "http://client:8000"
+      SERVER_SERVICE_URL: "http://server:8000"
+      INTERNAL_DEMO_TOKEN: "dev-mtls-token"
+    depends_on:
+      - client
+      - server
+
+  mtls-client-service:
+    build:
+      context: ..
+      dockerfile: api-mTLS/client/Dockerfile
+    container_name: client
+    environment:
+      SERVICE_NAME: "client"
+      SERVER_SERVICE_URL: "http://server:8000"
+      INTERNAL_DEMO_TOKEN: "dev-mtls-token"
+
+  mtls-server-service:
+    build:
+      context: ..
+      dockerfile: api-mTLS/server/Dockerfile
+    container_name: server
+    environment:
+      SERVICE_NAME: "server"
+      INTERNAL_DEMO_TOKEN: "dev-mtls-token"
