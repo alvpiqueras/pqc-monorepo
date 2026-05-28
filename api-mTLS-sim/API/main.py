@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from routes.artifacts import router as artifacts_router
 from routes.overview import router as overview_router
+from routes.handshake import router as handshake_router
 
 
 app = FastAPI(
@@ -31,7 +32,7 @@ app.add_middleware(
 
 app.include_router(overview_router)
 app.include_router(artifacts_router)
-
+app.include_router(handshake_router)
 
 @app.get(
     "/",
