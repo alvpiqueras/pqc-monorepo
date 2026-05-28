@@ -61,11 +61,6 @@ def verify_mutual_identity_info():
             "server_side_client_verification_ms",
             "total_mutual_identity_verification_ms",
         ],
-        "next_phase": (
-            "Phase C will reuse this mutual identity verification step before "
-            "simulating a protected service-to-service exchange with ML-KEM and "
-            "AES-GCM."
-        ),
     }
 
 

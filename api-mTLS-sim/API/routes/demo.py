@@ -23,19 +23,6 @@ def secure_service_exchange_info():
             "Demonstrate a full service-to-service secure exchange after mutual "
             "certificate authentication."
         ),
-        "scope": {
-            "models": (
-                "mTLS-style mutual authentication and protected internal "
-                "service-to-service communication."
-            ),
-            "does_not_model": [
-                "a production TLS stack",
-                "real socket-level TLS negotiation",
-                "browser TLS",
-                "certificate revocation checking",
-                "service mesh policy enforcement",
-            ],
-        },
         "actors": {
             "client_service": (
                 "The service initiating the request. It verifies the server "
@@ -72,19 +59,6 @@ def secure_service_exchange_info():
             "symmetric_channel": (
                 "AES-256-GCM protects application payloads after session "
                 "establishment."
-            ),
-        },
-        "difference_from_other_apis": {
-            "api_intranet": (
-                "Only the server is authenticated. The client does not present a "
-                "certificate."
-            ),
-            "api_interna": (
-                "Focuses on identity and authorization policies between services."
-            ),
-            "api_mtls_sim": (
-                "Focuses on mutual cryptographic authentication and protected "
-                "bidirectional exchange."
             ),
         },
         "measurements": [
