@@ -31,7 +31,10 @@ app = FastAPI(
 )
 
 
-@app.get("/", tags=["General"])
+@app.get(
+    "/",
+    tags=["PQC Base - Overview"],
+)
 def root():
     return {
         "status": "running",
@@ -43,7 +46,10 @@ def root():
     }
 
 
-@app.get("/health", tags=["General"])
+@app.get(
+    "/health",
+    tags=["PQC Base - Overview"],
+)
 def health_check():
     return {
         "status": "ok",
@@ -52,7 +58,10 @@ def health_check():
     }
 
 
-@app.get("/pqc/info", tags=["PQC Theory"])
+@app.get(
+    "/pqc/info",
+    tags=["PQC Base - Theory"],
+)
 def pqc_info():
     return {
         "service_name": SERVICE_NAME,
@@ -85,7 +94,10 @@ def pqc_info():
     }
 
 
-@app.get("/pqc/scenario", tags=["PQC Theory"])
+@app.get(
+    "/pqc/scenario",
+    tags=["PQC Base - Theory"],
+)
 def pqc_scenario():
     return {
         "title": "Base Post-Quantum Cryptography Layer",
@@ -111,7 +123,10 @@ def pqc_scenario():
     }
 
 
-@app.get("/pqc/primitives", tags=["PQC Theory"])
+@app.get(
+    "/pqc/primitives",
+    tags=["PQC Base - Theory"],
+)
 def pqc_primitives():
     return {
         "ml_kem_kyber": {
@@ -160,7 +175,10 @@ def pqc_primitives():
     }
 
 
-@app.get("/pqc/how-to-use", tags=["PQC Theory"])
+@app.get(
+    "/pqc/how-to-use",
+    tags=["PQC Base - Theory"],
+)
 def pqc_how_to_use():
     return {
         "kem_flow": {
@@ -198,47 +216,70 @@ def pqc_how_to_use():
     }
 
 
-@app.post("/kyber/keygen", tags=["ML-KEM / Kyber"])
+@app.post(
+    "/kyber/keygen",
+    tags=["ML-KEM"],
+)
 def kyber_keygen():
     try:
         return kyber_generate_keypair()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/kyber/encapsulate", tags=["ML-KEM / Kyber"])
+@app.post(
+    "/kyber/encapsulate",
+    tags=["ML-KEM"],
+)
 def kyber_encapsulate_endpoint(request: KyberEncapsulateRequest):
     try:
         return kyber_encapsulate(request.public_key)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/kyber/decapsulate", tags=["ML-KEM / Kyber"])
+@app.post(
+    "/kyber/decapsulate",
+    tags=["ML-KEM"],
+)
 def kyber_decapsulate_endpoint(request: KyberDecapsulateRequest):
     try:
         return kyber_decapsulate(request.ciphertext, request.secret_key)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/dilithium/keygen", tags=["ML-DSA / Dilithium"])
+@app.post(
+    "/dilithium/keygen",
+    tags=["ML-DSA"],
+)
 def dilithium_keygen():
     try:
         return dilithium_generate_keypair()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/dilithium/sign", tags=["ML-DSA / Dilithium"])
+@app.post(
+    "/dilithium/sign",
+    tags=["ML-DSA"],
+)
 def dilithium_sign_endpoint(request: DilithiumSignRequest):
     try:
         return dilithium_sign(request.message, request.secret_key)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/dilithium/verify", tags=["ML-DSA / Dilithium"])
+@app.post(
+    "/dilithium/verify",
+    tags=["ML-DSA"],
+)
 def dilithium_verify_endpoint(request: DilithiumVerifyRequest):
     try:
         return dilithium_verify(
@@ -246,5 +287,6 @@ def dilithium_verify_endpoint(request: DilithiumVerifyRequest):
             request.signature,
             request.public_key,
         )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

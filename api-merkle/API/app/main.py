@@ -30,9 +30,13 @@ from API.app.services.consistency_service import (
 from API.app.services.proof_service import get_inclusion_proof_for_identity
 from API.app.services.registry_service import add_entry, get_signed_root, list_entries
 
+
 app = FastAPI(
     title="PQC Certificate Registry API",
-    description="PoC de registro de identidades y claves públicas con árbol de Merkle y firma PQC de la raíz.",
+    description=(
+        "PoC de registro verificable de identidades y claves públicas usando "
+        "árboles de Merkle y firma post-cuántica de la raíz."
+    ),
     version="0.3.0",
 )
 
@@ -41,17 +45,118 @@ app = FastAPI(
 Base.metadata.create_all(bind=engine)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    tags=["Merkle Registry - Overview"],
+)
 def healthcheck() -> dict:
     """
-    Endpoint básico de comprobación de servicio.
+    Basic service healthcheck.
     """
     return {
         "message": "PQC Certificate Registry API is running"
     }
 
 
-@app.post("/registry/entries", response_model=RegistryEntryResponse)
+@app.get(
+    "/registry/info",
+    tags=["Merkle Registry - Overview"],
+)
+def registry_info() -> dict:
+    """
+    Explain the purpose of the Merkle-based certificate registry.
+
+    This endpoint provides a high-level description of the registry/log model
+    used as an alternative or complement to traditional X.509 certificate
+    consumption.
+    """
+
+    return {
+        "service_name": "api-merkle",
+        "title": "Merkle-based PQC Certificate Registry",
+        "summary": (
+            "This API implements a verifiable registry of identity-to-public-key "
+            "assertions using a Merkle tree. Each registered identity becomes a "
+            "leaf in the tree, and the authenticated state of the registry is "
+            "represented by a signed Merkle root."
+        ),
+        "problem_addressed": (
+            "Post-quantum X.509 certificates may become larger due to PQC public "
+            "keys and signatures. A Merkle-based registry explores an alternative "
+            "trust model where clients can verify that an identity and public key "
+            "belong to an authenticated registry state without relying only on "
+            "transporting full certificate chains in every interaction."
+        ),
+        "trust_model": {
+            "type": "verifiable-registry",
+            "operator": (
+                "A registry operator maintains the append-only set of identity "
+                "assertions and signs the current Merkle root."
+            ),
+            "client": (
+                "A verifier checks inclusion proofs, consistency proofs and the "
+                "signature over the Merkle root."
+            ),
+        },
+        "main_concepts": {
+            "registry_entry": (
+                "An assertion binding an identity to a public key and optional "
+                "metadata such as validity information."
+            ),
+            "leaf_hash": (
+                "Deterministic hash of the registry entry. It is used as a leaf "
+                "inside the Merkle tree."
+            ),
+            "merkle_root": (
+                "Compact cryptographic commitment to the full registry state at "
+                "a given tree version."
+            ),
+            "root_signature": (
+                "Post-quantum signature over the Merkle root, allowing clients to "
+                "authenticate the published registry state."
+            ),
+            "inclusion_proof": (
+                "Proof that a specific identity entry belongs to a given Merkle "
+                "root."
+            ),
+            "consistency_proof": (
+                "Proof that a newer registry version extends an older one in an "
+                "append-only way."
+            ),
+        },
+        "typical_flow": [
+            "A new identity and public key are registered.",
+            "The registry recomputes the Merkle tree.",
+            "The new Merkle root is signed with a PQC signature key.",
+            "A client requests an inclusion proof for an identity.",
+            "The client verifies the inclusion proof against the signed root.",
+            "Optionally, the client verifies consistency between registry versions.",
+        ],
+        "relationship_with_x509": (
+            "This API does not replace X.509 in production. It is an academic "
+            "prototype that explores how registry/log-based trust models could "
+            "complement or partially reduce repeated certificate material "
+            "transmission in PQC-heavy environments."
+        ),
+        "what_this_api_demonstrates": [
+            "Identity-to-key registration.",
+            "Merkle root generation.",
+            "PQC signature of authenticated registry state.",
+            "Inclusion proof generation and verification.",
+            "Append-only consistency proof generation and verification.",
+        ],
+        "scope_note": (
+            "This is a proof of concept for the TFM laboratory. It is not a "
+            "production certificate transparency log, CA system or public PKI."
+        ),
+    }
+
+
+@app.post(
+    "/registry/entries",
+    response_model=RegistryEntryResponse,
+    tags=["Entries"],
+)
 def create_registry_entry(payload: RegistryEntryCreate) -> RegistryEntryResponse:
     """
     Registra una nueva afirmación identidad ↔ clave pública
@@ -76,11 +181,16 @@ def create_registry_entry(payload: RegistryEntryCreate) -> RegistryEntryResponse
             message="Entrada registrada correctamente.",
             entry=entry_stored,
         )
+
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.get("/registry/entries", response_model=RegistryListResponse)
+@app.get(
+    "/registry/entries",
+    response_model=RegistryListResponse,
+    tags=["Entries"],
+)
 def get_registry_entries() -> RegistryListResponse:
     """
     Devuelve todas las entradas activas del registro.
@@ -107,11 +217,16 @@ def get_registry_entries() -> RegistryListResponse:
             total=len(entries),
             entries=entries,
         )
+
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.get("/registry/root", response_model=RootResponse)
+@app.get(
+    "/registry/root",
+    response_model=RootResponse,
+    tags=["Root"],
+)
 def get_registry_root() -> RootResponse:
     """
     Devuelve la última raíz firmada persistida del árbol de Merkle.
@@ -128,11 +243,41 @@ def get_registry_root() -> RootResponse:
             tree_size=root_data["tree_size"],
             generated_at=root_data["generated_at"],
         )
+
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/registry/proof", response_model=ProofResponse)
+@app.post(
+    "/registry/verify-root-signature",
+    response_model=VerifyRootSignatureResponse,
+    tags=["Root"],
+)
+def verify_registry_root_signature(
+    payload: VerifyRootSignatureRequest,
+) -> VerifyRootSignatureResponse:
+    """
+    Verifica la firma post-cuántica asociada a una raíz de Merkle.
+    """
+    try:
+        valid = verify_root_hash_signature(
+            root_hash=payload.root_hash,
+            signature_b64=payload.signature_b64,
+            public_key_b64=payload.public_key_b64,
+            algorithm=payload.algorithm,
+        )
+
+        return VerifyRootSignatureResponse(valid=valid)
+
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/registry/proof",
+    response_model=ProofResponse,
+    tags=["Inclusion Proofs"],
+)
 def get_registry_proof(payload: ProofRequest) -> ProofResponse:
     """
     Devuelve la prueba de inclusión para una identidad concreta,
@@ -153,13 +298,18 @@ def get_registry_proof(payload: ProofRequest) -> ProofResponse:
             tree_size=proof_data["tree_size"],
             generated_at=proof_data["generated_at"],
         )
+
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/registry/verify-proof", response_model=VerifyProofResponse)
+@app.post(
+    "/registry/verify-proof",
+    response_model=VerifyProofResponse,
+    tags=["Inclusion Proofs"],
+)
 def verify_registry_proof(payload: VerifyProofRequest) -> VerifyProofResponse:
     """
     Verifica localmente una prueba de inclusión frente a una raíz dada.
@@ -188,31 +338,16 @@ def verify_registry_proof(payload: VerifyProofRequest) -> VerifyProofResponse:
             computed_root=computed_root,
             expected_root=payload.root_hash,
         )
+
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/registry/verify-root-signature", response_model=VerifyRootSignatureResponse)
-def verify_registry_root_signature(
-    payload: VerifyRootSignatureRequest,
-) -> VerifyRootSignatureResponse:
-    """
-    Verifica la firma post-cuántica asociada a una raíz de Merkle.
-    """
-    try:
-        valid = verify_root_hash_signature(
-            root_hash=payload.root_hash,
-            signature_b64=payload.signature_b64,
-            public_key_b64=payload.public_key_b64,
-            algorithm=payload.algorithm,
-        )
-
-        return VerifyRootSignatureResponse(valid=valid)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@app.post("/registry/consistency-proof", response_model=ConsistencyProofResponse)
+@app.post(
+    "/registry/consistency-proof",
+    response_model=ConsistencyProofResponse,
+    tags=["Consistency Proofs"],
+)
 def get_registry_consistency_proof(
     payload: ConsistencyProofRequest,
 ) -> ConsistencyProofResponse:
@@ -238,6 +373,7 @@ def get_registry_consistency_proof(
             old_leaf_hashes=proof_data["old_leaf_hashes"],
             appended_leaf_hashes=proof_data["appended_leaf_hashes"],
         )
+
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -247,6 +383,7 @@ def get_registry_consistency_proof(
 @app.post(
     "/registry/verify-consistency-proof",
     response_model=VerifyConsistencyProofResponse,
+    tags=["Consistency Proofs"],
 )
 def verify_registry_consistency_proof(
     payload: VerifyConsistencyProofRequest,
@@ -266,5 +403,6 @@ def verify_registry_consistency_proof(
             expected_old_root=verification_result["expected_old_root"],
             expected_new_root=verification_result["expected_new_root"],
         )
+
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
