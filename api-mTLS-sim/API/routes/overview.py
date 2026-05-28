@@ -72,12 +72,4 @@ def mtls_scenario():
                 "inside an mTLS-like service-to-service flow."
             ),
         },
-        "planned_phases": {
-            "phase_a": "Register CA, client and server certificate artifacts.",
-            "phase_b": "Verify mutual identity using artifact IDs.",
-            "phase_c": (
-                "Simulate a secure exchange with mutual authentication, ML-KEM "
-                "session establishment and AES-GCM payload protection."
-            ),
-        },
     }
