@@ -22,7 +22,14 @@ app = FastAPI(
         },
         {
             "name": "Handshake",
-            "description": "Phase C1 handshake initiation against the server service.",
+            "description": "Handshake initiation against the server service.",
+        },
+        {
+            "name": "Encrypted Request",
+            "description": (
+                "Encrypts an application payload with AES-GCM after ML-KEM "
+                "session establishment."
+            ),
         },
     ],
 )

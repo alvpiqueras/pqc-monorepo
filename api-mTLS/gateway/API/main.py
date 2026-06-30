@@ -30,7 +30,7 @@ app = FastAPI(
         {
             "name": "Demo",
             "description": (
-                "Runs the distributed application-level mTLS-like demo phases."
+                "Runs the distributed application-level mTLS-like secure call demo."
             ),
         },
     ],

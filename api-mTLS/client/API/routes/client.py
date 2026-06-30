@@ -7,9 +7,12 @@ from models.client_models import (
     ConfigureClientIdentityResponse,
 )
 from models.secure_call_models import (
+    ClientEncryptedRequestRequest,
+    ClientEncryptedRequestResponse,
     ClientHandshakeRequest,
     ClientHandshakeResponse,
 )
+from services.client_encrypted_request_service import run_client_encrypted_request
 from services.client_identity_service import (
     configure_client_identity,
     get_client_identity_status,
@@ -39,6 +42,8 @@ def client_info(
 ):
     _require_internal_token(x_mtls_demo_token)
 
+    identity_status = get_client_identity_status()
+
     return {
         "service_name": settings.SERVICE_NAME,
         "version": settings.SERVICE_VERSION,
@@ -46,8 +51,9 @@ def client_info(
         "service_role": settings.SERVICE_ROLE,
         "server_service_url": settings.SERVER_SERVICE_URL,
         "status": "running",
-        "identity_configured": get_client_identity_status()["configured"],
-        "phase_c1_ready": get_client_identity_status()["configured"],
+        "identity_configured": identity_status["configured"],
+        "handshake_ready": identity_status["configured"],
+        "encrypted_request_ready": identity_status["configured"],
     }
 
 
@@ -111,16 +117,53 @@ async def secure_call_handshake(
     x_mtls_demo_token: str | None = Header(default=None),
 ):
     """
-    Phase C1 endpoint.
-
-    The gateway calls this endpoint to ask the client service to initiate a
-    handshake with the server service.
+    Ask the client service to initiate a handshake with the server service.
     """
 
     _require_internal_token(x_mtls_demo_token)
 
     try:
         return await run_client_handshake(request)
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+
+@router.post(
+    "/secure-call/encrypted-request",
+    response_model=ClientEncryptedRequestResponse,
+    tags=["Encrypted Request"],
+)
+async def secure_call_encrypted_request(
+    request: ClientEncryptedRequestRequest,
+    x_mtls_demo_token: str | None = Header(default=None),
+):
+    """
+    Ask the client service to send an encrypted request to the server service.
+
+    The client verifies the server certificate, establishes a shared secret with
+    ML-KEM and encrypts the application payload with AES-GCM.
+    """
+
+    _require_internal_token(x_mtls_demo_token)
+
+    try:
+        return await run_client_encrypted_request(request)
 
     except RuntimeError as exc:
         raise HTTPException(

@@ -16,6 +16,11 @@ from services.server_identity_service import (
     get_server_identity_status,
 )
 
+from models.secure_endpoint_models import (
+    EncryptedRequestFromClient,
+    SecureEndpointResponse,
+)
+from services.server_secure_endpoint_service import process_encrypted_request
 
 router = APIRouter(
     prefix="/server",
@@ -124,6 +129,46 @@ def handshake_start(
 
     try:
         return start_server_handshake(request)
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+    
+
+@router.post(
+    "/secure-endpoint",
+    response_model=SecureEndpointResponse,
+    tags=["Secure Endpoint"],
+)
+def secure_endpoint(
+    request: EncryptedRequestFromClient,
+    x_mtls_demo_token: str | None = Header(default=None),
+):
+    """
+    Receive and process an encrypted service-to-service request.
+
+    The server verifies the client certificate, decapsulates the ML-KEM shared
+    secret and decrypts the AES-GCM protected payload.
+    """
+
+    _require_internal_token(x_mtls_demo_token)
+
+    try:
+        return process_encrypted_request(request)
 
     except RuntimeError as exc:
         raise HTTPException(

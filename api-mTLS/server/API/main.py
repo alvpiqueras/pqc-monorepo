@@ -22,7 +22,14 @@ app = FastAPI(
         },
         {
             "name": "Handshake",
-            "description": "Phase C1 handshake start with ephemeral ML-KEM material.",
+            "description": "Handshake start with ephemeral ML-KEM material.",
+        },
+        {
+            "name": "Secure Endpoint",
+            "description": (
+                "Receives encrypted service-to-service requests and decrypts "
+                "them after certificate verification and ML-KEM decapsulation."
+            ),
         },
     ],
 )

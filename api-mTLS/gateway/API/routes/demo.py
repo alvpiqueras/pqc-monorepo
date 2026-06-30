@@ -1,11 +1,14 @@
 from fastapi import APIRouter, HTTPException
 
 from models.demo_models import (
+    EncryptedRequestDemoRequest,
+    EncryptedRequestDemoResponse,
     HandshakeDemoRequest,
     HandshakeDemoResponse,
 )
 from services.demo_service import (
-    PHASE_C_SCOPE_NOTE,
+    APPLICATION_LEVEL_MTLS_SCOPE_NOTE,
+    run_encrypted_request_demo,
     run_handshake_demo,
 )
 
@@ -21,47 +24,65 @@ router = APIRouter(
 )
 def demo_info():
     return {
-        "title": "Distributed mTLS-like Secure Call Demo",
-        "phase": "Phase C",
-        "current_subphase": "Phase C1 - Handshake and server certificate verification",
-        "scope_note": PHASE_C_SCOPE_NOTE,
+        "title": "Distributed mTLS-like Secure Service-to-Service Demo",
+        "scope_note": APPLICATION_LEVEL_MTLS_SCOPE_NOTE,
         "important_clarification": {
             "not_native_tls": True,
             "explanation": (
                 "This API does not replace the native TLS handshake performed by "
-                "the HTTP runtime. Instead, it demonstrates the same security ideas "
-                "at application level: service identities, mutual certificate "
+                "the HTTP runtime. Instead, it demonstrates the same security "
+                "ideas at application level: service identities, certificate "
                 "verification, post-quantum key establishment and authenticated "
                 "encryption over real service-to-service HTTP calls."
             ),
         },
-        "phase_c1_flow": [
-            "Gateway receives a frontend-friendly demo request.",
-            "Gateway asks the client service to start the handshake.",
-            "Client checks that its identity was configured during bootstrap.",
-            "Client calls server /server/handshake/start.",
-            "Server checks that its identity was configured during bootstrap.",
-            "Server creates a temporary handshake session.",
-            "Server generates an ephemeral ML-KEM public key.",
-            "Server returns its certificate, session_id and ML-KEM public key.",
+        "available_steps": {
+            "handshake": {
+                "endpoint": "POST /mtls/demo/handshake",
+                "summary": (
+                    "The gateway asks the client to start a handshake with the "
+                    "server. The server returns its certificate and an ephemeral "
+                    "ML-KEM public key. The client verifies the server certificate."
+                ),
+            },
+            "encrypted_request": {
+                "endpoint": "POST /mtls/demo/encrypted-request",
+                "summary": (
+                    "The gateway asks the client to establish a shared secret with "
+                    "the server using ML-KEM, encrypt an application payload with "
+                    "AES-GCM and send it to the server secure endpoint."
+                ),
+            },
+        },
+        "current_secure_request_flow": [
+            "Gateway receives a frontend-friendly request.",
+            "Gateway asks the client service to send an encrypted request.",
+            "Client starts a handshake with the server.",
+            "Server returns its certificate and an ephemeral ML-KEM public key.",
             "Client verifies the server certificate against the configured CA.",
-            "Client checks that the server certificate subject matches the expected server identity.",
+            "Client encapsulates a shared secret using the server ML-KEM public key.",
+            "Client derives an AES-256-GCM key using HKDF.",
+            "Client encrypts the application payload with AES-GCM.",
+            "Client sends the encrypted payload and its certificate to the server.",
+            "Server verifies the client certificate against the configured CA.",
+            "Server decapsulates the ML-KEM ciphertext.",
+            "Server derives the same AES-256-GCM key using HKDF.",
+            "Server decrypts the protected request payload.",
             "Gateway returns the result, steps and measurements.",
         ],
-        "not_done_in_phase_c1": [
-            "No ML-KEM encapsulation is performed yet.",
-            "No shared secret is established yet.",
-            "No AES-GCM encryption is performed yet.",
-            "No protected application payload is sent yet.",
+        "not_yet_included": [
+            "The server response is not encrypted back to the client yet.",
+            "The final bidirectional encrypted exchange will be added separately.",
         ],
-        "next_subphases": {
-            "phase_c2": (
-                "Client encapsulates a shared secret using the server ML-KEM public key "
-                "and sends an AES-GCM encrypted request to the server."
+        "security_mapping": {
+            "ML-DSA": (
+                "Used by internal-ca for PQC X.509 certificate signatures and service identity."
             ),
-            "phase_c3": (
-                "Server encrypts the response and the client decrypts it before "
-                "returning the final result to the gateway."
+            "ML-KEM": (
+                "Used by the service-to-service demo for post-quantum session establishment."
+            ),
+            "AES-GCM": (
+                "Used for authenticated encryption of the application request payload."
             ),
         },
     }
@@ -77,6 +98,27 @@ async def handshake_demo_endpoint(
 ):
     try:
         return await run_handshake_demo(request)
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+
+@router.post(
+    "/encrypted-request",
+    response_model=EncryptedRequestDemoResponse,
+    tags=["Demo"],
+)
+async def encrypted_request_demo_endpoint(
+    request: EncryptedRequestDemoRequest,
+):
+    try:
+        return await run_encrypted_request_demo(request)
 
     except HTTPException:
         raise

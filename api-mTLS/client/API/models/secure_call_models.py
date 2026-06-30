@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field
 
 class ClientHandshakeRequest(BaseModel):
     """
-    Request received by the client service from the gateway for Phase C1.
+    Request received by the client service from the gateway for the handshake demo.
 
-    The payload is still not encrypted in this phase. It is included only as
+    The payload is still not encrypted here. It is included only as
     application-level metadata for traceability.
     """
 
@@ -18,7 +18,7 @@ class ClientHandshakeRequest(BaseModel):
 
     payload: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Application-level metadata. Not encrypted in Phase C1.",
+        description="Application-level metadata. Not encrypted in the handshake-only step.",
     )
 
 
@@ -63,6 +63,74 @@ class ClientHandshakeResponse(BaseModel):
     client_service: Dict[str, Any]
     server_handshake: Dict[str, Any]
     certificate_verification: Dict[str, Any]
+
+    steps: List[str]
+    measurements: Dict[str, float]
+
+
+class ClientEncryptedRequestRequest(BaseModel):
+    """
+    Request received by the client service from the gateway for the encrypted
+    request demo.
+    """
+
+    operation: str = Field(
+        default="get-customer-risk-profile",
+        description="Logical operation requested by the gateway.",
+    )
+
+    payload: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "customer_id": "cust-001",
+            "requested_by": "billing-service",
+            "purpose": "internal-risk-check",
+        },
+        description="Application payload that will be encrypted by the client.",
+    )
+
+
+class ServerSecureEndpointResponse(BaseModel):
+    """
+    Response expected from server /server/secure-endpoint.
+    """
+
+    secure_request_processed: bool
+    request_decrypted_by_server: bool
+    server_verified_client_certificate: bool
+
+    reason: str
+
+    decrypted_payload: Optional[Dict[str, Any]] = None
+
+    client_certificate_verification: Dict[str, Any]
+    kem: Dict[str, Any]
+    encryption: Dict[str, Any]
+
+    server_service: Dict[str, Any]
+
+    steps: List[str]
+    measurements: Dict[str, float]
+
+
+class ClientEncryptedRequestResponse(BaseModel):
+    encrypted_request_completed: bool
+
+    request_encrypted_by_client: bool
+    request_decrypted_by_server: bool
+
+    client_verified_server_certificate: bool
+    server_verified_client_certificate: bool
+
+    reason: str
+
+    client_service: Dict[str, Any]
+    server_handshake: Dict[str, Any]
+    certificate_verification: Dict[str, Any]
+
+    kem: Dict[str, Any]
+    encryption: Dict[str, Any]
+
+    server_response: Dict[str, Any]
 
     steps: List[str]
     measurements: Dict[str, float]
