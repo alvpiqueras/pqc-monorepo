@@ -7,3 +7,4 @@ class ConnectivityCheckResponse(BaseModel):
     gateway: Dict[str, Any]
     client_service: Dict[str, Any]
     server_service: Dict[str, Any]
+    measurements: Dict[str, float]

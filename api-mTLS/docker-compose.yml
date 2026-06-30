@@ -1,5 +1,5 @@
 services:
-  mtls-gateway-api:
+  gateway:
     build:
       context: ..
       dockerfile: api-mTLS/gateway/Dockerfile
@@ -8,7 +8,7 @@ services:
       - "8010:8000"
     environment:
       SERVICE_NAME: "gateway"
-      INTERNAL_CA_URL: "http://internal-ca:8000"
+      INTERNAL_CA_URL: "https://internal-ca.onrender.com"
       CLIENT_SERVICE_URL: "http://client:8000"
       SERVER_SERVICE_URL: "http://server:8000"
       INTERNAL_DEMO_TOKEN: "dev-mtls-token"
@@ -16,7 +16,7 @@ services:
       - client
       - server
 
-  mtls-client-service:
+  client:
     build:
       context: ..
       dockerfile: api-mTLS/client/Dockerfile
@@ -26,7 +26,7 @@ services:
       SERVER_SERVICE_URL: "http://server:8000"
       INTERNAL_DEMO_TOKEN: "dev-mtls-token"
 
-  mtls-server-service:
+  server:
     build:
       context: ..
       dockerfile: api-mTLS/server/Dockerfile

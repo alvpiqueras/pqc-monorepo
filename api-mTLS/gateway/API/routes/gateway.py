@@ -12,7 +12,7 @@ router = APIRouter(
 
 @router.get(
     "/info",
-    tags=["mTLS Distributed - Overview"],
+    tags=["API mTLS Overview"],
 )
 def mtls_gateway_info():
     return {
@@ -23,16 +23,21 @@ def mtls_gateway_info():
         "component_role": settings.COMPONENT_ROLE,
         "architecture": {
             "gateway": "Public orchestration API used by the frontend.",
-            "client_service": "Internal service initiating the secure call.",
-            "server_service": "Internal service receiving the secure call.",
-            "internal_ca": "External internal CA service issuing PQC X.509 certificates.",
+            "client": "Service that initiates the secure service-to-service call.",
+            "server": "Service that receives and processes the secure call.",
+            "internal_ca": "Internal CA API that issues PQC X.509 certificates.",
+        },
+        "configured_urls": {
+            "internal_ca_url": settings.INTERNAL_CA_URL,
+            "client_service_url": settings.CLIENT_SERVICE_URL,
+            "server_service_url": settings.SERVER_SERVICE_URL,
         },
     }
 
 
 @router.get(
     "/scenario",
-    tags=["mTLS Distributed - Overview"],
+    tags=["API mTLS Overview"],
 )
 def mtls_gateway_scenario():
     return {
@@ -44,15 +49,15 @@ def mtls_gateway_scenario():
             "issued by the internal PQC CA."
         ),
         "actors": {
-            "gateway_api": "Orchestrates the demo and exposes a frontend-friendly API.",
-            "client_service": "Initiates the protected service-to-service call.",
-            "server_service": "Receives and processes the protected call.",
+            "gateway": "Orchestrates the demo and exposes a frontend-friendly API.",
+            "client": "Initiates the protected service-to-service call.",
+            "server": "Receives and processes the protected call.",
             "internal_ca": "Issues PQC X.509 certificates used for mutual authentication.",
         },
         "planned_flow": [
             "Gateway requests certificates from internal-ca.",
-            "Gateway configures client-service and server-service identities.",
-            "Client-service initiates a real HTTP call to server-service.",
+            "Gateway configures client and server identities.",
+            "Client initiates a real HTTP call to server.",
             "Both services verify each other's certificates at application level.",
             "ML-KEM establishes a shared secret.",
             "AES-GCM protects the request and response payloads.",
@@ -68,7 +73,7 @@ def mtls_gateway_scenario():
 @router.get(
     "/connectivity",
     response_model=ConnectivityCheckResponse,
-    tags=["mTLS Distributed - Connectivity"],
+    tags=["Connectivity"],
 )
 async def mtls_connectivity_check():
     try:
