@@ -37,15 +37,15 @@ class EncryptedRequestFromClient(BaseModel):
     )
 
     nonce_b64: str = Field(
-        description="Base64-encoded AES-GCM nonce.",
+        description="Base64-encoded AES-GCM nonce for the encrypted request.",
     )
 
     aad_b64: str = Field(
-        description="Base64-encoded additional authenticated data.",
+        description="Base64-encoded additional authenticated data for the encrypted request.",
     )
 
     encrypted_payload_b64: str = Field(
-        description="Base64-encoded AES-GCM encrypted payload.",
+        description="Base64-encoded AES-GCM encrypted request payload.",
     )
 
     metadata: Dict[str, Any] = Field(
@@ -59,9 +59,16 @@ class SecureEndpointResponse(BaseModel):
     request_decrypted_by_server: bool
     server_verified_client_certificate: bool
 
+    response_encrypted_by_server: bool = False
+
     reason: str
 
     decrypted_payload: Optional[Dict[str, Any]] = None
+
+    encrypted_response_b64: Optional[str] = None
+    response_nonce_b64: Optional[str] = None
+    response_aad_b64: Optional[str] = None
+    response_metadata: Dict[str, Any] = Field(default_factory=dict)
 
     client_certificate_verification: Dict[str, Any]
     kem: Dict[str, Any]

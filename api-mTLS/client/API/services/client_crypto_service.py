@@ -162,3 +162,59 @@ def encrypt_payload_with_aes_gcm(
     }
 
     return encrypted_request, measurements
+
+
+def decrypt_payload_with_aes_gcm(
+    aes_key: bytes,
+    nonce_b64: str,
+    aad_b64: str,
+    encrypted_payload_b64: str,
+) -> tuple[Dict[str, Any], Dict[str, float]]:
+    """
+    Decrypt the AES-GCM protected response returned by the server.
+    """
+
+    total_start = time.perf_counter()
+
+    nonce = b64decode_bytes(nonce_b64, "response_nonce_b64")
+    aad = b64decode_bytes(aad_b64, "response_aad_b64")
+    encrypted_payload = b64decode_bytes(
+        encrypted_payload_b64,
+        "encrypted_response_b64",
+    )
+
+    decrypt_start = time.perf_counter()
+
+    try:
+        aesgcm = AESGCM(aes_key)
+        plaintext = aesgcm.decrypt(
+            nonce,
+            encrypted_payload,
+            aad,
+        )
+
+    except Exception as exc:
+        raise RuntimeError(f"AES-GCM response decryption failed: {exc}") from exc
+
+    decrypt_end = time.perf_counter()
+
+    try:
+        payload = json.loads(plaintext.decode("utf-8"))
+
+    except Exception as exc:
+        raise ValueError("Decrypted server response is not valid JSON.") from exc
+
+    return payload, {
+        "client_response_aes_gcm_nonce_size_bytes": len(nonce),
+        "client_response_aes_gcm_aad_size_bytes": len(aad),
+        "client_encrypted_response_size_bytes": len(encrypted_payload),
+        "client_decrypted_response_size_bytes": len(plaintext),
+        "client_aes_gcm_response_decryption_ms": round(
+            (decrypt_end - decrypt_start) * 1000,
+            3,
+        ),
+        "client_aes_gcm_response_decryption_total_ms": round(
+            (time.perf_counter() - total_start) * 1000,
+            3,
+        ),
+    }

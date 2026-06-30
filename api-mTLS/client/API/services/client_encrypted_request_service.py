@@ -13,6 +13,7 @@ from models.secure_call_models import (
 )
 from services.certificate_verification_service import verify_certificate_against_ca
 from services.client_crypto_service import (
+    decrypt_payload_with_aes_gcm,
     derive_aes_gcm_key,
     encapsulate_shared_secret,
     encrypt_payload_with_aes_gcm,
@@ -30,21 +31,23 @@ async def run_client_encrypted_request(
     request: ClientEncryptedRequestRequest,
 ) -> Dict[str, Any]:
     """
-    Run the encrypted request flow from the client perspective.
+    Run the full secure service-to-service call from the client perspective.
 
     The client:
     - starts a handshake with the server;
     - verifies the server certificate;
     - encapsulates a shared secret with ML-KEM;
     - derives an AES-GCM key with HKDF;
-    - encrypts the payload;
-    - sends it to the server secure endpoint.
+    - encrypts the request payload;
+    - sends it to the server secure endpoint;
+    - receives an encrypted response;
+    - decrypts the server response using the same AES-GCM session key.
     """
 
     total_start = time.perf_counter()
 
     steps: list[str] = [
-        "Client received an encrypted request demo from the gateway.",
+        "Client received a secure service-to-service call request from the gateway.",
         "Client checks that its identity was configured during bootstrap.",
     ]
 
@@ -64,7 +67,7 @@ async def run_client_encrypted_request(
         "operation": request.operation,
         "payload": request.payload,
         "client_service_id": identity.get("service_id", settings.SERVICE_ID),
-        "phase": "encrypted-request",
+        "phase": "secure-call",
     }
 
     handshake_start = time.perf_counter()
@@ -89,7 +92,6 @@ async def run_client_encrypted_request(
     measurements.update(server_handshake.measurements)
 
     steps.append("Client received server certificate and ephemeral ML-KEM public key.")
-
     steps.extend(server_handshake.steps)
 
     steps.append("Client verifies the server certificate against the configured CA.")
@@ -108,21 +110,25 @@ async def run_client_encrypted_request(
 
         total_end = time.perf_counter()
 
-        measurements["client_encrypted_request_total_ms"] = round(
+        measurements["client_secure_call_total_ms"] = round(
             (total_end - total_start) * 1000,
             3,
         )
 
         return {
+            "secure_call_completed": False,
             "encrypted_request_completed": False,
             "request_encrypted_by_client": False,
             "request_decrypted_by_server": False,
+            "response_encrypted_by_server": False,
+            "response_decrypted_by_client": False,
             "client_verified_server_certificate": False,
             "server_verified_client_certificate": False,
             "reason": (
                 "The client rejected the server handshake because the server "
                 "certificate could not be verified."
             ),
+            "decrypted_server_response": None,
             "client_service": {
                 "service_name": settings.SERVICE_NAME,
                 "service_id": identity.get("service_id", settings.SERVICE_ID),
@@ -150,6 +156,8 @@ async def run_client_encrypted_request(
                 "algorithm": "AES-256-GCM",
                 "request_encrypted": False,
                 "request_decrypted": False,
+                "response_encrypted": False,
+                "response_decrypted": False,
             },
             "server_response": {},
             "steps": steps,
@@ -170,21 +178,22 @@ async def run_client_encrypted_request(
     aes_key, hkdf_metrics = derive_aes_gcm_key(shared_secret)
     measurements.update(hkdf_metrics)
 
-    aad_metadata = {
+    request_aad_metadata = {
         "session_id": server_handshake.session_id,
         "operation": request.operation,
         "client_service_id": identity.get("service_id", settings.SERVICE_ID),
         "server_service_id": server_handshake.server_service.get("service_id"),
         "kem_algorithm": server_handshake.kem_algorithm,
         "encryption_algorithm": "AES-256-GCM",
+        "direction": "client-to-server",
     }
 
-    steps.append("Client encrypts the application payload with AES-GCM.")
+    steps.append("Client encrypts the application request payload with AES-GCM.")
 
     encrypted_payload, encryption_metrics = encrypt_payload_with_aes_gcm(
         aes_key=aes_key,
         payload=request.payload,
-        aad_metadata=aad_metadata,
+        aad_metadata=request_aad_metadata,
     )
     measurements.update(encryption_metrics)
 
@@ -202,7 +211,7 @@ async def run_client_encrypted_request(
         "metadata": {
             "operation": request.operation,
             "client_service_id": identity.get("service_id", settings.SERVICE_ID),
-            "purpose": "encrypted service-to-service request demo",
+            "purpose": "secure service-to-service call demo",
         },
     }
 
@@ -228,13 +237,51 @@ async def run_client_encrypted_request(
     measurements.update(server_response.measurements)
 
     steps.extend(server_response.steps)
-    steps.append("Client received the server processing result.")
+    steps.append("Client received the encrypted server response.")
+
+    response_decrypted_by_client = False
+    decrypted_server_response = None
+
+    if server_response.response_encrypted_by_server:
+        steps.append("Client decrypts the encrypted server response with AES-GCM.")
+
+        if not server_response.encrypted_response_b64:
+            raise ValueError("Server response is missing encrypted_response_b64.")
+
+        if not server_response.response_nonce_b64:
+            raise ValueError("Server response is missing response_nonce_b64.")
+
+        if not server_response.response_aad_b64:
+            raise ValueError("Server response is missing response_aad_b64.")
+
+        decrypted_server_response, response_decrypt_metrics = decrypt_payload_with_aes_gcm(
+            aes_key=aes_key,
+            nonce_b64=server_response.response_nonce_b64,
+            aad_b64=server_response.response_aad_b64,
+            encrypted_payload_b64=server_response.encrypted_response_b64,
+        )
+        measurements.update(response_decrypt_metrics)
+
+        response_decrypted_by_client = True
+        steps.append("Client decrypted the server response successfully.")
+
+    else:
+        steps.append("Server did not return an encrypted response.")
 
     total_end = time.perf_counter()
 
-    measurements["client_encrypted_request_total_ms"] = round(
+    measurements["client_secure_call_total_ms"] = round(
         (total_end - total_start) * 1000,
         3,
+    )
+
+    secure_call_completed = bool(
+        verification["verified"]
+        and server_response.secure_request_processed
+        and server_response.request_decrypted_by_server
+        and server_response.server_verified_client_certificate
+        and server_response.response_encrypted_by_server
+        and response_decrypted_by_client
     )
 
     encrypted_request_completed = bool(
@@ -244,27 +291,32 @@ async def run_client_encrypted_request(
         and server_response.server_verified_client_certificate
     )
 
-    if encrypted_request_completed:
+    if secure_call_completed:
         reason = (
-            "Encrypted request completed successfully. The client verified the "
-            "server certificate, established a shared secret with ML-KEM, "
-            "encrypted the payload with AES-GCM and the server decrypted it."
+            "Secure call completed successfully. The client verified the server "
+            "certificate, established a shared secret with ML-KEM, encrypted the "
+            "request with AES-GCM, the server decrypted it, encrypted the response "
+            "and the client decrypted the response."
         )
     else:
         reason = (
-            "Encrypted request did not complete successfully. Check certificate "
-            "verification, KEM and server decryption details."
+            "Secure call did not complete successfully. Check certificate "
+            "verification, ML-KEM, request encryption and response decryption details."
         )
 
     return {
+        "secure_call_completed": secure_call_completed,
         "encrypted_request_completed": encrypted_request_completed,
         "request_encrypted_by_client": True,
         "request_decrypted_by_server": bool(server_response.request_decrypted_by_server),
+        "response_encrypted_by_server": bool(server_response.response_encrypted_by_server),
+        "response_decrypted_by_client": response_decrypted_by_client,
         "client_verified_server_certificate": bool(verification["verified"]),
         "server_verified_client_certificate": bool(
             server_response.server_verified_client_certificate
         ),
         "reason": reason,
+        "decrypted_server_response": decrypted_server_response,
         "client_service": {
             "service_name": settings.SERVICE_NAME,
             "service_id": identity.get("service_id", settings.SERVICE_ID),
@@ -295,8 +347,12 @@ async def run_client_encrypted_request(
             "algorithm": "AES-256-GCM",
             "request_encrypted": True,
             "request_decrypted": bool(server_response.request_decrypted_by_server),
-            "aad_authenticated": True,
-            "nonce_generated": True,
+            "response_encrypted": bool(server_response.response_encrypted_by_server),
+            "response_decrypted": response_decrypted_by_client,
+            "request_aad_authenticated": True,
+            "response_aad_authenticated": response_decrypted_by_client,
+            "request_nonce_generated": True,
+            "response_nonce_received": bool(server_response.response_nonce_b64),
         },
         "server_response": server_response.model_dump(),
         "steps": steps,

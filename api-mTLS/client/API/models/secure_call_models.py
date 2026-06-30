@@ -70,8 +70,8 @@ class ClientHandshakeResponse(BaseModel):
 
 class ClientEncryptedRequestRequest(BaseModel):
     """
-    Request received by the client service from the gateway for the encrypted
-    request demo.
+    Request received by the client service from the gateway for the secure
+    service-to-service call demo.
     """
 
     operation: str = Field(
@@ -98,9 +98,16 @@ class ServerSecureEndpointResponse(BaseModel):
     request_decrypted_by_server: bool
     server_verified_client_certificate: bool
 
+    response_encrypted_by_server: bool = False
+
     reason: str
 
     decrypted_payload: Optional[Dict[str, Any]] = None
+
+    encrypted_response_b64: Optional[str] = None
+    response_nonce_b64: Optional[str] = None
+    response_aad_b64: Optional[str] = None
+    response_metadata: Dict[str, Any] = Field(default_factory=dict)
 
     client_certificate_verification: Dict[str, Any]
     kem: Dict[str, Any]
@@ -113,15 +120,27 @@ class ServerSecureEndpointResponse(BaseModel):
 
 
 class ClientEncryptedRequestResponse(BaseModel):
+    """
+    Final response returned by the client to the gateway after completing the
+    bidirectional encrypted service-to-service exchange.
+    """
+
+    secure_call_completed: bool
+
     encrypted_request_completed: bool
 
     request_encrypted_by_client: bool
     request_decrypted_by_server: bool
 
+    response_encrypted_by_server: bool
+    response_decrypted_by_client: bool
+
     client_verified_server_certificate: bool
     server_verified_client_certificate: bool
 
     reason: str
+
+    decrypted_server_response: Optional[Dict[str, Any]] = None
 
     client_service: Dict[str, Any]
     server_handshake: Dict[str, Any]

@@ -10,12 +10,39 @@ from services.server_crypto_service import (
     decapsulate_shared_secret,
     decrypt_payload_with_aes_gcm,
     derive_aes_gcm_key,
+    encrypt_payload_with_aes_gcm,
 )
 from services.server_identity_service import require_configured_server_identity
 from services.server_session_service import (
     get_handshake_session,
     mark_handshake_session_used,
 )
+
+
+def _build_application_response(
+    decrypted_payload: Dict[str, Any],
+    request_metadata: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Build a deterministic demo application response.
+
+    This simulates the server business logic after decrypting the request.
+    """
+
+    customer_id = decrypted_payload.get("customer_id", "unknown-customer")
+    operation = request_metadata.get("operation", "unknown-operation")
+
+    return {
+        "operation": operation,
+        "customer_id": customer_id,
+        "processed_by": settings.SERVICE_ID,
+        "decision": "request accepted",
+        "risk_level": "low",
+        "message": (
+            "The encrypted request was verified, decrypted and processed "
+            "successfully by the server service."
+        ),
+    }
 
 
 def process_encrypted_request(
@@ -29,7 +56,9 @@ def process_encrypted_request(
     - retrieves the handshake session;
     - decapsulates the ML-KEM shared secret;
     - derives the AES-GCM key;
-    - decrypts the request payload.
+    - decrypts the request payload;
+    - builds an application response;
+    - encrypts the response with AES-GCM.
     """
 
     total_start = time.perf_counter()
@@ -56,7 +85,9 @@ def process_encrypted_request(
         measurements[f"server_client_certificate_{key}"] = value
 
     if not verification["verified"]:
-        steps.append("Server rejected the request because client certificate verification failed.")
+        steps.append(
+            "Server rejected the request because client certificate verification failed."
+        )
 
         total_end = time.perf_counter()
 
@@ -69,11 +100,16 @@ def process_encrypted_request(
             "secure_request_processed": False,
             "request_decrypted_by_server": False,
             "server_verified_client_certificate": False,
+            "response_encrypted_by_server": False,
             "reason": (
                 "The server rejected the encrypted request because the client "
                 "certificate could not be verified."
             ),
             "decrypted_payload": None,
+            "encrypted_response_b64": None,
+            "response_nonce_b64": None,
+            "response_aad_b64": None,
+            "response_metadata": {},
             "client_certificate_verification": verification,
             "kem": {
                 "algorithm": request.kem_algorithm,
@@ -82,6 +118,7 @@ def process_encrypted_request(
             "encryption": {
                 "algorithm": request.encryption_algorithm,
                 "request_decrypted": False,
+                "response_encrypted": False,
             },
             "server_service": {
                 "service_name": settings.SERVICE_NAME,
@@ -130,9 +167,36 @@ def process_encrypted_request(
     )
     measurements.update(decrypt_metrics)
 
+    steps.append("Server decrypted the request successfully.")
+    steps.append("Server processes the decrypted application payload.")
+
+    application_response = _build_application_response(
+        decrypted_payload=decrypted_payload,
+        request_metadata=request.metadata,
+    )
+
+    response_metadata = {
+        "session_id": request.session_id,
+        "operation": request.metadata.get("operation"),
+        "server_service_id": identity.get("service_id", settings.SERVICE_ID),
+        "client_service_id": request.metadata.get("client_service_id"),
+        "kem_algorithm": request.kem_algorithm,
+        "encryption_algorithm": request.encryption_algorithm,
+        "response_type": "encrypted-application-response",
+    }
+
+    steps.append("Server encrypts the application response with AES-GCM.")
+
+    encrypted_response, response_encryption_metrics = encrypt_payload_with_aes_gcm(
+        aes_key=aes_key,
+        payload=application_response,
+        aad_metadata=response_metadata,
+    )
+    measurements.update(response_encryption_metrics)
+
     mark_handshake_session_used(request.session_id)
 
-    steps.append("Server decrypted the request successfully.")
+    steps.append("Server encrypted the response successfully.")
     steps.append("Server marks the handshake session as used.")
 
     total_end = time.perf_counter()
@@ -146,11 +210,17 @@ def process_encrypted_request(
         "secure_request_processed": True,
         "request_decrypted_by_server": True,
         "server_verified_client_certificate": True,
+        "response_encrypted_by_server": True,
         "reason": (
             "The server verified the client certificate, established the same "
-            "ML-KEM shared secret and decrypted the AES-GCM protected request."
+            "ML-KEM shared secret, decrypted the AES-GCM protected request and "
+            "encrypted the application response."
         ),
         "decrypted_payload": decrypted_payload,
+        "encrypted_response_b64": encrypted_response["encrypted_response_b64"],
+        "response_nonce_b64": encrypted_response["response_nonce_b64"],
+        "response_aad_b64": encrypted_response["response_aad_b64"],
+        "response_metadata": response_metadata,
         "client_certificate_verification": verification,
         "kem": {
             "algorithm": request.kem_algorithm,
@@ -161,8 +231,11 @@ def process_encrypted_request(
         "encryption": {
             "algorithm": request.encryption_algorithm,
             "request_decrypted": True,
-            "aad_received": True,
-            "nonce_received": True,
+            "response_encrypted": True,
+            "request_aad_received": True,
+            "request_nonce_received": True,
+            "response_aad_created": True,
+            "response_nonce_created": True,
         },
         "server_service": {
             "service_name": settings.SERVICE_NAME,

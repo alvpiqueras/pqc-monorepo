@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import time
 from typing import Any, Dict
 
@@ -19,6 +20,10 @@ def b64decode_bytes(value: str, field_name: str) -> bytes:
 
     except Exception as exc:
         raise ValueError(f"Invalid base64 value for '{field_name}'.") from exc
+
+
+def b64encode_bytes(value: bytes) -> str:
+    return base64.b64encode(value).decode("ascii")
 
 
 def derive_aes_gcm_key(
@@ -139,3 +144,71 @@ def decrypt_payload_with_aes_gcm(
             3,
         ),
     }
+
+
+def encrypt_payload_with_aes_gcm(
+    aes_key: bytes,
+    payload: Dict[str, Any],
+    aad_metadata: Dict[str, Any],
+) -> tuple[Dict[str, str], Dict[str, float]]:
+    """
+    Encrypt the server application response with AES-256-GCM.
+
+    A fresh nonce is generated for the response. The same AES key derived from
+    the ML-KEM shared secret is reused for this session, but the nonce and AAD
+    are different from the request.
+    """
+
+    total_start = time.perf_counter()
+
+    nonce = os.urandom(12)
+
+    plaintext = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    aad = json.dumps(
+        aad_metadata,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    encrypt_start = time.perf_counter()
+
+    try:
+        aesgcm = AESGCM(aes_key)
+        encrypted_payload = aesgcm.encrypt(
+            nonce,
+            plaintext,
+            aad,
+        )
+
+    except Exception as exc:
+        raise RuntimeError(f"AES-GCM response encryption failed: {exc}") from exc
+
+    encrypt_end = time.perf_counter()
+
+    encrypted_response = {
+        "response_nonce_b64": b64encode_bytes(nonce),
+        "response_aad_b64": b64encode_bytes(aad),
+        "encrypted_response_b64": b64encode_bytes(encrypted_payload),
+    }
+
+    measurements = {
+        "server_response_aes_gcm_nonce_size_bytes": len(nonce),
+        "server_response_aes_gcm_aad_size_bytes": len(aad),
+        "server_response_plaintext_size_bytes": len(plaintext),
+        "server_encrypted_response_size_bytes": len(encrypted_payload),
+        "server_aes_gcm_response_encryption_ms": round(
+            (encrypt_end - encrypt_start) * 1000,
+            3,
+        ),
+        "server_aes_gcm_response_encryption_total_ms": round(
+            (time.perf_counter() - total_start) * 1000,
+            3,
+        ),
+    }
+
+    return encrypted_response, measurements

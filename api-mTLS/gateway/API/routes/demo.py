@@ -5,11 +5,14 @@ from models.demo_models import (
     EncryptedRequestDemoResponse,
     HandshakeDemoRequest,
     HandshakeDemoResponse,
+    SecureCallDemoRequest,
+    SecureCallDemoResponse,
 )
 from services.demo_service import (
     APPLICATION_LEVEL_MTLS_SCOPE_NOTE,
     run_encrypted_request_demo,
     run_handshake_demo,
+    run_secure_call_demo,
 )
 
 
@@ -53,26 +56,33 @@ def demo_info():
                     "AES-GCM and send it to the server secure endpoint."
                 ),
             },
+            "secure_call": {
+                "endpoint": "POST /mtls/demo/secure-call",
+                "summary": (
+                    "The gateway asks the client to perform the complete secure "
+                    "service-to-service exchange: encrypted request, server "
+                    "decryption, encrypted response and client decryption."
+                ),
+            },
         },
-        "current_secure_request_flow": [
+        "secure_call_flow": [
             "Gateway receives a frontend-friendly request.",
-            "Gateway asks the client service to send an encrypted request.",
+            "Gateway asks the client service to perform the secure call.",
             "Client starts a handshake with the server.",
             "Server returns its certificate and an ephemeral ML-KEM public key.",
             "Client verifies the server certificate against the configured CA.",
             "Client encapsulates a shared secret using the server ML-KEM public key.",
             "Client derives an AES-256-GCM key using HKDF.",
-            "Client encrypts the application payload with AES-GCM.",
-            "Client sends the encrypted payload and its certificate to the server.",
+            "Client encrypts the application request payload with AES-GCM.",
+            "Client sends the encrypted request and its certificate to the server.",
             "Server verifies the client certificate against the configured CA.",
             "Server decapsulates the ML-KEM ciphertext.",
             "Server derives the same AES-256-GCM key using HKDF.",
             "Server decrypts the protected request payload.",
-            "Gateway returns the result, steps and measurements.",
-        ],
-        "not_yet_included": [
-            "The server response is not encrypted back to the client yet.",
-            "The final bidirectional encrypted exchange will be added separately.",
+            "Server processes the application request.",
+            "Server encrypts the application response with AES-GCM.",
+            "Client decrypts the encrypted server response.",
+            "Gateway returns the final result, steps and measurements.",
         ],
         "security_mapping": {
             "ML-DSA": (
@@ -82,7 +92,7 @@ def demo_info():
                 "Used by the service-to-service demo for post-quantum session establishment."
             ),
             "AES-GCM": (
-                "Used for authenticated encryption of the application request payload."
+                "Used for authenticated encryption of application request and response payloads."
             ),
         },
     }
@@ -119,6 +129,27 @@ async def encrypted_request_demo_endpoint(
 ):
     try:
         return await run_encrypted_request_demo(request)
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+
+@router.post(
+    "/secure-call",
+    response_model=SecureCallDemoResponse,
+    tags=["Demo"],
+)
+async def secure_call_demo_endpoint(
+    request: SecureCallDemoRequest,
+):
+    try:
+        return await run_secure_call_demo(request)
 
     except HTTPException:
         raise

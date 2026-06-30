@@ -29,6 +29,28 @@ def mtls_gateway_scenario():
             "server": "Receives and processes the protected call.",
             "internal_ca": "Issues PQC X.509 certificates used for mutual authentication.",
         },
+        "implemented_capabilities": {
+            "distributed_services": (
+                "Gateway, client and server services run as separate services and "
+                "communicate through real HTTP calls."
+            ),
+            "identity_bootstrap": (
+                "Gateway consumes internal-ca to issue PQC X.509 certificates and "
+                "configure client/server identities."
+            ),
+            "handshake": (
+                "Client initiates a real handshake with the server, receives an "
+                "ephemeral ML-KEM public key and verifies the server certificate."
+            ),
+            "encrypted_request": (
+                "Client establishes a shared secret with ML-KEM, encrypts an "
+                "application payload with AES-GCM and sends it to the server."
+            ),
+            "encrypted_response": (
+                "Server encrypts the application response with AES-GCM and the "
+                "client decrypts it before returning the final result to the gateway."
+            ),
+        },
         "security_mapping": {
             "ML-DSA": (
                 "Used by internal-ca for PQC X.509 certificate signatures and "
@@ -39,7 +61,8 @@ def mtls_gateway_scenario():
                 "establishment."
             ),
             "AES-GCM": (
-                "Used in later phases for authenticated encryption of application payloads."
+                "Used for authenticated encryption of application request and "
+                "response payloads."
             ),
         },
         "scope_note": (

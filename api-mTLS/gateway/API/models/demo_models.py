@@ -46,8 +46,7 @@ class EncryptedRequestDemoRequest(BaseModel):
     """
     Request model for the encrypted service-to-service request demo.
 
-    The gateway asks the client service to establish a shared secret with the
-    server and send an AES-GCM encrypted application payload.
+    This endpoint is kept as an intermediate demo step.
     """
 
     operation: str = Field(
@@ -76,6 +75,64 @@ class EncryptedRequestDemoResponse(BaseModel):
 
     reason: str
     scope_note: str
+
+    client_service: Dict[str, Any]
+    server_handshake: Dict[str, Any]
+    certificate_verification: Dict[str, Any]
+
+    kem: Dict[str, Any]
+    encryption: Dict[str, Any]
+
+    server_response: Dict[str, Any]
+
+    steps: List[str]
+    measurements: Dict[str, float]
+
+    raw_client_response: Optional[Dict[str, Any]] = None
+
+
+class SecureCallDemoRequest(BaseModel):
+    """
+    Request model for the final secure service-to-service call demo.
+
+    The gateway asks the client service to perform the complete flow:
+    certificate verification, ML-KEM shared secret establishment, encrypted
+    request and encrypted response.
+    """
+
+    operation: str = Field(
+        default="get-customer-risk-profile",
+        description="Logical operation requested by the gateway.",
+    )
+
+    payload: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "customer_id": "cust-001",
+            "requested_by": "billing-service",
+            "purpose": "internal-risk-check",
+        },
+        description="Application payload that will be protected in the secure call.",
+    )
+
+
+class SecureCallDemoResponse(BaseModel):
+    secure_call_completed: bool
+
+    encrypted_request_completed: bool
+
+    request_encrypted_by_client: bool
+    request_decrypted_by_server: bool
+
+    response_encrypted_by_server: bool
+    response_decrypted_by_client: bool
+
+    client_verified_server_certificate: bool
+    server_verified_client_certificate: bool
+
+    reason: str
+    scope_note: str
+
+    decrypted_server_response: Optional[Dict[str, Any]] = None
 
     client_service: Dict[str, Any]
     server_handshake: Dict[str, Any]
