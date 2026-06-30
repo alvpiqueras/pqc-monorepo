@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 
+from fastapi import FastAPI
+
 from core.config import settings
 from routes.client import router as client_router
 
 
 app = FastAPI(
-    title="mTLS Client",
+    title="mTLS Client Service",
     description="Internal client service for the distributed mTLS demonstration.",
     version=settings.SERVICE_VERSION,
 )
@@ -13,7 +15,10 @@ app = FastAPI(
 app.include_router(client_router)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    tags=["Overview"],
+)
 def root():
     return {
         "service": settings.SERVICE_NAME,
