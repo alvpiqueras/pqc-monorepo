@@ -23,7 +23,7 @@ LATEST_BOOTSTRAP_STATE: Dict[str, Any] = {
 
 def _internal_headers() -> dict[str, str]:
     return {
-        "X-QCS-Demo-Token": settings.INTERNAL_DEMO_TOKEN,
+        "X-mTLS-Demo-Token": settings.INTERNAL_DEMO_TOKEN,
     }
 
 

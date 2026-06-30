@@ -30,9 +30,9 @@ def _require_internal_token(token: str | None) -> None:
     tags=["Overview"],
 )
 def server_info(
-    x_qcs_demo_token: str | None = Header(default=None),
+    x_mtls_demo_token: str | None = Header(default=None),
 ):
-    _require_internal_token(x_qcs_demo_token)
+    _require_internal_token(x_mtls_demo_token)
 
     return {
         "service_name": settings.SERVICE_NAME,
@@ -51,7 +51,7 @@ def server_info(
 )
 def configure_identity(
     request: ConfigureServerIdentityRequest,
-    x_qcs_demo_token: str | None = Header(default=None),
+    x_mtls_demo_token: str | None = Header(default=None),
 ):
     """
     Configure the server service with the certificate material obtained by the gateway.
@@ -59,7 +59,7 @@ def configure_identity(
     This endpoint is intended to be called by the gateway during bootstrap.
     """
 
-    _require_internal_token(x_qcs_demo_token)
+    _require_internal_token(x_mtls_demo_token)
 
     try:
         return configure_server_identity(request)
@@ -83,12 +83,12 @@ def configure_identity(
     tags=["Identity"],
 )
 def identity_status(
-    x_qcs_demo_token: str | None = Header(default=None),
+    x_mtls_demo_token: str | None = Header(default=None),
 ):
     """
     Return the current in-memory identity configuration status.
     """
 
-    _require_internal_token(x_qcs_demo_token)
+    _require_internal_token(x_mtls_demo_token)
 
     return get_server_identity_status()

@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: api-mTLS/gateway/Dockerfile
-    container_name: gateway
+    container_name: mtls-gateway
     ports:
       - "8010:8000"
     environment:
@@ -20,7 +20,7 @@ services:
     build:
       context: ..
       dockerfile: api-mTLS/client/Dockerfile
-    container_name: client
+    container_name: mtls-client
     environment:
       SERVICE_NAME: "client"
       SERVER_SERVICE_URL: "http://server:8000"
@@ -30,7 +30,7 @@ services:
     build:
       context: ..
       dockerfile: api-mTLS/server/Dockerfile
-    container_name: server
+    container_name: mtls-server
     environment:
       SERVICE_NAME: "server"
       INTERNAL_DEMO_TOKEN: "dev-mtls-token"
