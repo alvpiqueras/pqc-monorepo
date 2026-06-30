@@ -5,7 +5,7 @@ from routes.server import router as server_router
 
 
 app = FastAPI(
-    title="mTLS Server",
+    title="mTLS Server Service",
     description="Internal server service for the distributed mTLS demonstration.",
     version=settings.SERVICE_VERSION,
 )
@@ -13,7 +13,10 @@ app = FastAPI(
 app.include_router(server_router)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    tags=["Overview"],
+)
 def root():
     return {
         "service": settings.SERVICE_NAME,

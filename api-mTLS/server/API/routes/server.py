@@ -1,6 +1,15 @@
 from fastapi import APIRouter, Header, HTTPException
 
 from core.config import settings
+from models.server_models import (
+    ConfigureServerIdentityRequest,
+    ConfigureServerIdentityResponse,
+    ServerIdentityStatusResponse,
+)
+from services.server_identity_service import (
+    configure_server_identity,
+    get_server_identity_status,
+)
 
 
 router = APIRouter(
@@ -18,7 +27,7 @@ def _require_internal_token(token: str | None) -> None:
 
 @router.get(
     "/info",
-    tags=["mTLS Server Service - Overview"],
+    tags=["Overview"],
 )
 def server_info(
     x_qcs_demo_token: str | None = Header(default=None),
@@ -31,4 +40,55 @@ def server_info(
         "service_id": settings.SERVICE_ID,
         "service_role": settings.SERVICE_ROLE,
         "status": "running",
+        "identity_configured": get_server_identity_status()["configured"],
     }
+
+
+@router.post(
+    "/configure-identity",
+    response_model=ConfigureServerIdentityResponse,
+    tags=["Identity"],
+)
+def configure_identity(
+    request: ConfigureServerIdentityRequest,
+    x_qcs_demo_token: str | None = Header(default=None),
+):
+    """
+    Configure the server service with the certificate material obtained by the gateway.
+
+    This endpoint is intended to be called by the gateway during bootstrap.
+    """
+
+    _require_internal_token(x_qcs_demo_token)
+
+    try:
+        return configure_server_identity(request)
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )
+
+
+@router.get(
+    "/identity/status",
+    response_model=ServerIdentityStatusResponse,
+    tags=["Identity"],
+)
+def identity_status(
+    x_qcs_demo_token: str | None = Header(default=None),
+):
+    """
+    Return the current in-memory identity configuration status.
+    """
+
+    _require_internal_token(x_qcs_demo_token)
+
+    return get_server_identity_status()
