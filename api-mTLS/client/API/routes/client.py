@@ -6,10 +6,15 @@ from models.client_models import (
     ConfigureClientIdentityRequest,
     ConfigureClientIdentityResponse,
 )
+from models.secure_call_models import (
+    ClientHandshakeRequest,
+    ClientHandshakeResponse,
+)
 from services.client_identity_service import (
     configure_client_identity,
     get_client_identity_status,
 )
+from services.client_secure_call_service import run_client_handshake
 
 
 router = APIRouter(
@@ -42,6 +47,7 @@ def client_info(
         "server_service_url": settings.SERVER_SERVICE_URL,
         "status": "running",
         "identity_configured": get_client_identity_status()["configured"],
+        "phase_c1_ready": get_client_identity_status()["configured"],
     }
 
 
@@ -93,3 +99,43 @@ def identity_status(
     _require_internal_token(x_mtls_demo_token)
 
     return get_client_identity_status()
+
+
+@router.post(
+    "/secure-call/handshake",
+    response_model=ClientHandshakeResponse,
+    tags=["Handshake"],
+)
+async def secure_call_handshake(
+    request: ClientHandshakeRequest,
+    x_mtls_demo_token: str | None = Header(default=None),
+):
+    """
+    Phase C1 endpoint.
+
+    The gateway calls this endpoint to ask the client service to initiate a
+    handshake with the server service.
+    """
+
+    _require_internal_token(x_mtls_demo_token)
+
+    try:
+        return await run_client_handshake(request)
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        )

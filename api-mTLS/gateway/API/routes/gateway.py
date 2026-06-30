@@ -11,31 +11,6 @@ router = APIRouter(
 
 
 @router.get(
-    "/info",
-    tags=["API mTLS Overview"],
-)
-def mtls_gateway_info():
-    return {
-        "service_name": settings.SERVICE_NAME,
-        "version": settings.SERVICE_VERSION,
-        "use_case": settings.USE_CASE,
-        "trust_model": settings.TRUST_MODEL,
-        "component_role": settings.COMPONENT_ROLE,
-        "architecture": {
-            "gateway": "Public orchestration API used by the frontend.",
-            "client": "Service that initiates the secure service-to-service call.",
-            "server": "Service that receives and processes the secure call.",
-            "internal_ca": "Internal CA API that issues PQC X.509 certificates.",
-        },
-        "configured_urls": {
-            "internal_ca_url": settings.INTERNAL_CA_URL,
-            "client_service_url": settings.CLIENT_SERVICE_URL,
-            "server_service_url": settings.SERVER_SERVICE_URL,
-        },
-    }
-
-
-@router.get(
     "/scenario",
     tags=["API mTLS Overview"],
 )
@@ -54,18 +29,24 @@ def mtls_gateway_scenario():
             "server": "Receives and processes the protected call.",
             "internal_ca": "Issues PQC X.509 certificates used for mutual authentication.",
         },
-        "planned_flow": [
-            "Gateway requests certificates from internal-ca.",
-            "Gateway configures client and server identities.",
-            "Client initiates a real HTTP call to server.",
-            "Both services verify each other's certificates at application level.",
-            "ML-KEM establishes a shared secret.",
-            "AES-GCM protects the request and response payloads.",
-        ],
+        "security_mapping": {
+            "ML-DSA": (
+                "Used by internal-ca for PQC X.509 certificate signatures and "
+                "service identity."
+            ),
+            "ML-KEM": (
+                "Used by the service-to-service demo for post-quantum session "
+                "establishment."
+            ),
+            "AES-GCM": (
+                "Used in later phases for authenticated encryption of application payloads."
+            ),
+        },
         "scope_note": (
-            "This is not native TLS termination with PQC certificates. It is a "
-            "distributed application-level simulation of mTLS-like trust and "
-            "secure exchange using real service-to-service HTTP calls."
+            "This is not native TLS termination with PQC certificates. The demo "
+            "runs over real HTTP calls between distributed services, but the "
+            "mTLS-like authentication, certificate verification, key establishment "
+            "and payload protection are implemented at application level."
         ),
     }
 

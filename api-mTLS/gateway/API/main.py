@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from routes.bootstrap import router as bootstrap_router
+from routes.demo import router as demo_router
 from routes.gateway import router as gateway_router
 
 
@@ -26,6 +27,12 @@ app = FastAPI(
             "name": "Bootstrap",
             "description": "Configures client and server identities using internal-ca.",
         },
+        {
+            "name": "Demo",
+            "description": (
+                "Runs the distributed application-level mTLS-like demo phases."
+            ),
+        },
     ],
 )
 
@@ -45,6 +52,7 @@ app.add_middleware(
 
 app.include_router(gateway_router)
 app.include_router(bootstrap_router)
+app.include_router(demo_router)
 
 
 @app.get(
