@@ -10,7 +10,7 @@ from core.config import settings
 
 def _internal_headers() -> dict[str, str]:
     return {
-        "X-QCS-Demo-Token": settings.INTERNAL_DEMO_TOKEN,
+        "X-MTLS-Demo-Token": settings.INTERNAL_DEMO_TOKEN,
     }
 
 
