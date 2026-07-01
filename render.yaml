@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: api-mtls-gateway
+    runtime: docker
+    plan: free
+    branch: staging
+    dockerfilePath: ./api-mTLS/gateway/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: SERVICE_NAME
+        value: gateway
+      - key: INTERNAL_CA_URL
+        value: https://internal-ca.onrender.com
+      - key: CLIENT_SERVICE_URL
+        value: https://api-mtls-client.onrender.com
+      - key: SERVER_SERVICE_URL
+        value: https://api-mtls-server.onrender.com
+      - key: INTERNAL_DEMO_TOKEN
+        sync: false
+
+  - type: web
+    name: api-mtls-client
+    runtime: docker
+    plan: free
+    branch: staging
+    dockerfilePath: ./api-mTLS/client/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: SERVICE_NAME
+        value: client
+      - key: SERVER_SERVICE_URL
+        value: https://api-mtls-server.onrender.com
+      - key: INTERNAL_DEMO_TOKEN
+        sync: false
+
+  - type: web
+    name: api-mtls-server
+    runtime: docker
+    plan: free
+    branch: staging
+    dockerfilePath: ./api-mTLS/server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: SERVICE_NAME
+        value: server
+      - key: INTERNAL_DEMO_TOKEN
+        sync: false
