@@ -30,6 +30,12 @@ from API.app.services.consistency_service import (
 from API.app.services.proof_service import get_inclusion_proof_for_identity
 from API.app.services.registry_service import add_entry, get_signed_root, list_entries
 
+from API.app.models.metrics_models import (
+    MerkleMetricsDemoRequest,
+    MerkleMetricsDemoResponse,
+)
+from API.app.services.metrics_service import run_merkle_metrics_demo
+
 
 app = FastAPI(
     title="PQC Certificate Registry API",
@@ -37,7 +43,7 @@ app = FastAPI(
         "PoC de registro verificable de identidades y claves públicas usando "
         "árboles de Merkle y firma post-cuántica de la raíz."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 # Creación automática de tablas al arrancar la aplicación.
@@ -402,6 +408,32 @@ def verify_registry_consistency_proof(
             reconstructed_new_root=verification_result["reconstructed_new_root"],
             expected_old_root=verification_result["expected_old_root"],
             expected_new_root=verification_result["expected_new_root"],
+        )
+
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+
+@app.post(
+    "/registry/metrics/demo",
+    response_model=MerkleMetricsDemoResponse,
+    tags=["Metrics"],
+)
+def registry_metrics_demo(
+    payload: MerkleMetricsDemoRequest,
+) -> MerkleMetricsDemoResponse:
+    """
+    Runs an in-memory metrics demo for the Merkle registry.
+
+    This endpoint generates synthetic registry entries, builds a Merkle tree,
+    generates and verifies an inclusion proof, checks a simple append-only
+    consistency payload and signs/verifies the Merkle root with ML-DSA.
+
+    It does not modify the persistent registry database.
+    """
+    try:
+        return MerkleMetricsDemoResponse(
+            **run_merkle_metrics_demo(payload)
         )
 
     except Exception as exc:
