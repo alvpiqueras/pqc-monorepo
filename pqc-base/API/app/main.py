@@ -11,13 +11,19 @@ from app.crypto.dilithium import verify as dilithium_verify
 from app.models.schemas import (
     KyberEncapsulateRequest,
     KyberDecapsulateRequest,
+    KyberKeypairResponse,
+    KyberEncapsulateResponse,
+    KyberDecapsulateResponse,
     DilithiumSignRequest,
     DilithiumVerifyRequest,
+    DilithiumKeypairResponse,
+    DilithiumSignResponse,
+    DilithiumVerifyResponse,
 )
 
 
 SERVICE_NAME = "pqc-base"
-SERVICE_VERSION = "0.2.0"
+SERVICE_VERSION = "0.3.0"
 
 
 app = FastAPI(
@@ -26,8 +32,26 @@ app = FastAPI(
     description=(
         "Base post-quantum cryptography implementation for the migration laboratory. "
         "It exposes core ML-KEM/Kyber and ML-DSA/Dilithium operations used by "
-        "higher-level services."
+        "higher-level services, including primitive-level timing and size measurements."
     ),
+    openapi_tags=[
+        {
+            "name": "PQC Base - Overview",
+            "description": "General service information and health checks.",
+        },
+        {
+            "name": "PQC Base - Theory",
+            "description": "Conceptual information about the supported PQC primitives.",
+        },
+        {
+            "name": "ML-KEM",
+            "description": "ML-KEM key generation, encapsulation and decapsulation.",
+        },
+        {
+            "name": "ML-DSA",
+            "description": "ML-DSA key generation, signing and verification.",
+        },
+    ],
 )
 
 
@@ -91,6 +115,15 @@ def pqc_info():
                 ],
             },
         },
+        "measurement_support": {
+            "enabled": True,
+            "timing_unit": "milliseconds",
+            "size_unit": "bytes",
+            "note": (
+                "Primitive endpoints return timing measurements and artifact sizes "
+                "to support the evaluation section of the migration laboratory."
+            ),
+        },
     }
 
 
@@ -120,6 +153,11 @@ def pqc_scenario():
             "It is not a VPN or SSH server.",
             "It only demonstrates primitive-level operations.",
         ],
+        "evaluation_role": (
+            "The measurements returned by this component are intended to provide "
+            "a primitive-level baseline, without HTTP orchestration between multiple "
+            "services or higher-level protocol logic."
+        ),
     }
 
 
@@ -218,6 +256,7 @@ def pqc_how_to_use():
 
 @app.post(
     "/kyber/keygen",
+    response_model=KyberKeypairResponse,
     tags=["ML-KEM"],
 )
 def kyber_keygen():
@@ -230,6 +269,7 @@ def kyber_keygen():
 
 @app.post(
     "/kyber/encapsulate",
+    response_model=KyberEncapsulateResponse,
     tags=["ML-KEM"],
 )
 def kyber_encapsulate_endpoint(request: KyberEncapsulateRequest):
@@ -242,6 +282,7 @@ def kyber_encapsulate_endpoint(request: KyberEncapsulateRequest):
 
 @app.post(
     "/kyber/decapsulate",
+    response_model=KyberDecapsulateResponse,
     tags=["ML-KEM"],
 )
 def kyber_decapsulate_endpoint(request: KyberDecapsulateRequest):
@@ -254,6 +295,7 @@ def kyber_decapsulate_endpoint(request: KyberDecapsulateRequest):
 
 @app.post(
     "/dilithium/keygen",
+    response_model=DilithiumKeypairResponse,
     tags=["ML-DSA"],
 )
 def dilithium_keygen():
@@ -266,6 +308,7 @@ def dilithium_keygen():
 
 @app.post(
     "/dilithium/sign",
+    response_model=DilithiumSignResponse,
     tags=["ML-DSA"],
 )
 def dilithium_sign_endpoint(request: DilithiumSignRequest):
@@ -278,6 +321,7 @@ def dilithium_sign_endpoint(request: DilithiumSignRequest):
 
 @app.post(
     "/dilithium/verify",
+    response_model=DilithiumVerifyResponse,
     tags=["ML-DSA"],
 )
 def dilithium_verify_endpoint(request: DilithiumVerifyRequest):
