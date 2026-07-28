@@ -1,4 +1,4 @@
-FROM ghcr.io/alvpiqueras/qcs-liboqs-base:latest
+FROM ghcr.io/alvpiqueras/qcs-liboqs-base:tfm-v1.0.0
 
 WORKDIR /workspace
 
