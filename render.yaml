@@ -3,10 +3,11 @@ services:
     name: api-mtls-gateway
     runtime: docker
     plan: free
-    branch: staging
+    branch: tfm-demo
     dockerfilePath: ./api-mTLS/gateway/Dockerfile
     dockerContext: .
     healthCheckPath: /
+    autoDeployTrigger: commit
     envVars:
       - key: SERVICE_NAME
         value: gateway
@@ -23,10 +24,11 @@ services:
     name: api-mtls-client
     runtime: docker
     plan: free
-    branch: staging
+    branch: tfm-demo
     dockerfilePath: ./api-mTLS/client/Dockerfile
     dockerContext: .
     healthCheckPath: /
+    autoDeployTrigger: commit
     envVars:
       - key: SERVICE_NAME
         value: client
@@ -39,10 +41,11 @@ services:
     name: api-mtls-server
     runtime: docker
     plan: free
-    branch: staging
+    branch: tfm-demo
     dockerfilePath: ./api-mTLS/server/Dockerfile
     dockerContext: .
     healthCheckPath: /
+    autoDeployTrigger: commit
     envVars:
       - key: SERVICE_NAME
         value: server
