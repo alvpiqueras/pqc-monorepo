@@ -4,12 +4,17 @@ on:
   push:
     branches:
       - main
-      - refactor-liboqs-comun
     paths:
       - "liboqs/**"
       - "docker/liboqs-base.Dockerfile"
       - ".github/workflows/build-liboqs-base.yml"
+
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional stable Docker tag, for example tfm-v1.0.0"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -30,12 +35,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/qcs-liboqs-base
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ inputs.release_tag }},enable=${{ inputs.release_tag != '' }}
+
       - name: Build and push liboqs base image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/liboqs-base.Dockerfile
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/qcs-liboqs-base:latest
-            ghcr.io/${{ github.repository_owner }}/qcs-liboqs-base:${{ github.sha }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
